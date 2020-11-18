@@ -15,11 +15,14 @@
 #include "ship_strategy.h"
 #include "clg_comm.h"
 #include "game_types.h"
+#include "game_status.h"
 
 #include "loglevels.h"
 #define __MODUUL__ "shipstrategy"
 #define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
 #include "log.h"
+
+#define START_COOP_MSG_ID 130
 
 static osMutexId_t snd_mutex;
 static osMessageQueueId_t snd_msg_qID;
@@ -29,8 +32,12 @@ static bool m_sending = false;
 static comms_layer_t* sradio;
 am_addr_t my_address;
 
-void not_much(void *args);
+bool no_coop = false;
+
+void start_coop(void *args);
 void send_msg(void *args);
+am_addr_t get_nearest_n();
+static uint16_t calcDistance(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2);
 //osEventFlagsId_t evt_id;
 
 /**********************************************************************************************
@@ -47,20 +54,30 @@ void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 	sradio = radio;//this is the only write, so not going to protect it with mutex
 	my_address = addr;//this is the only write, so not going to protect it with mutex
 
-	osThreadNew(not_much, NULL, NULL);//sends welcome message
+	osThreadNew(start_coop, NULL, NULL);//sends welcome message
 }
 
 /**********************************************************************************************
  *	 some threads
  *********************************************************************************************/
 
-void not_much(void *args)
+void start_coop(void *args)
 {
+	coop_msg_t cmsg;
+	am_addr_t dest;
 	
 	for(;;)
 	{
-		osDelay(60*osKernelGetTickFreq()); //60 seconds
-		//do some strategy evaluation here
+		osDelay(10*osKernelGetTickFreq()); //10 seconds
+		if(!no_coop)
+		{
+			cmsg.messageID = START_COOP_MSG_ID;
+			cmsg.senderAddr = my_address;
+			dest = get_nearest_n();
+			cmsg.destinationAddr = dest;
+
+			//TODO put msg to queue
+		}
 	}
 }
 
@@ -128,5 +145,54 @@ void send_msg(void *args)
 /**********************************************************************************************
  *	Utility functions
  **********************************************************************************************/
+
+am_addr_t get_nearest_n()
+{
+	am_addr_t ship_addresses[MAX_SHIPS], saddr;
+	uint8_t num_ships, i;
+	uint16_t dist, smallest_dist;
+
+	loc_bundle_t sloc, my_loc;
+
+	num_ships = get_all_ship_addr(ship_addresses);
+	
+	saddr = my_address;
+
+	if(num_ships > 0)
+	{
+		my_loc = get_ship_location(my_address);
+
+		sloc = get_ship_location(ship_addresses[0]);
+		smallest_dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
+		saddr = ship_addresses[0];
+
+		for(i=1;i<num_ships;i++)
+		{
+			sloc = get_ship_location(ship_addresses[i]);
+			dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
+			if(dist < smallest_dist)
+			{
+				smallest_dist = dist;
+				saddr = ship_addresses[i];
+			}
+		}
+	}
+	else ;//no ships beside me return my address
+	
+	return saddr;
+}
+
+static uint16_t calcDistance(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
+{
+	return abs(x2 - x1) + abs(y2 - y1);
+}
+
+
+
+
+
+
+
+
 
 

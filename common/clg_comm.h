@@ -14,10 +14,24 @@ enum RadioCountToLedsEnum
 
 //-------- SHIP MESSAGE STRUCTURES
 
+#pragma pack(push)
+#pragma pack(1)
+typedef struct coop_msg_t {
+	uint8_t messageID;
+	am_addr_t senderAddr;
+	am_addr_t destinationAddr;
+} coop_msg_t;
 
+#pragma pack(1)
+typedef struct coop_msg_ans_t {
+	uint8_t messageID;
+	am_addr_t senderAddr;
+	am_addr_t destinationAddr;
+	bool agreement;
+} coop_msg_ans_t;
 
 //-------- CRANE MESSAGE STRUCTURES
-#pragma pack(push)
+
 #pragma pack(1)
 typedef struct craneLocationMsg {
 	uint8_t messageID;

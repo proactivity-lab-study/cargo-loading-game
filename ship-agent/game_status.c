@@ -316,6 +316,18 @@ loc_bundle_t get_ship_location(am_addr_t ship_addr)
 	return mloc;
 }
 
+uint8_t get_all_ship_addr(am_addr_t ship_addr[])
+{
+	uint8_t i, k;
+	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
+	for(i=0;i<MAX_SHIPS;i++)
+	{
+		if(ships[i].shipInGame)ship_addr[k++] = ships[i].shipAdd;
+	}
+	osMutexRelease(sddb_mutex);
+	return k;
+}
+
 static uint8_t get_empty_slot()
 {
 	uint8_t k;
