@@ -1,5 +1,13 @@
 /**
  *
+ * TODO reminder to use hton and ntoh functions to assign variable values
+ * 		larger than a byte in network messages!! 
+ *
+ * 
+ * 
+ *
+ * 
+ * 
  * Copyright Proactivity Lab 2020
  *
  * @license MIT
@@ -27,11 +35,10 @@ static osMessageQueueId_t snd_msg_qID;
 static comms_msg_t m_msg;
 static bool m_sending = false;
 static comms_layer_t* sradio;
-am_addr_t my_address;
+static am_addr_t my_address;
 
-void not_much(void *args);
-void send_msg(void *args);
-//osEventFlagsId_t evt_id;
+static void not_much(void *args);
+static void send_msg(void *args);
 
 /**********************************************************************************************
  *	Initialise module
@@ -39,28 +46,27 @@ void send_msg(void *args);
 
 void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 {
-	snd_mutex = osMutexNew(NULL);	//protects against sending another message before hardware has handled previous message
-	//evt_id = osEventFlagsNew(NULL);	//tells get_all_ships_data to quiery the next ship
-
-	snd_msg_qID = osMessageQueueNew(9, sizeof(queryMsg), NULL);
+	snd_mutex = osMutexNew(NULL); // Protects against sending message before hardware has handled previous message
 	
-	sradio = radio;//this is the only write, so not going to protect it with mutex
-	my_address = addr;//this is the only write, so not going to protect it with mutex
+	snd_msg_qID = osMessageQueueNew(9, sizeof(query_msg_t), NULL);
+	
+	sradio = radio; 	// This is the only write, so not going to protect it with mutex
+	my_address = addr; 	//This is the only write, so not going to protect it with mutex
 
-	osThreadNew(not_much, NULL, NULL);//sends welcome message
+	osThreadNew(not_much, NULL, NULL); // Sends welcome message
 }
 
 /**********************************************************************************************
- *	 some threads
+ *	 Module threads
  *********************************************************************************************/
 
-void not_much(void *args)
+static void not_much(void *args)
 {
 	
 	for(;;)
 	{
 		osDelay(60*osKernelGetTickFreq()); //60 seconds
-		//do some strategy evaluation here
+		// Do some strategy evaluation here
 	}
 }
 
@@ -89,9 +95,9 @@ static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_err
     osMutexRelease(snd_mutex);
 }
 
-void send_msg(void *args)
+static void send_msg(void *args)
 {
-	queryMsg packet;
+	query_msg_t packet;
 	for(;;)
 	{
 		osMessageQueueGet(snd_msg_qID, &packet, NULL, osWaitForever);
@@ -99,10 +105,11 @@ void send_msg(void *args)
 		if(!m_sending)
 		{
 			comms_init_message(sradio, &m_msg);
-			queryMsg * qmsg = comms_get_payload(sradio, &m_msg, sizeof(queryMsg));
+			query_msg_t * qmsg = comms_get_payload(sradio, &m_msg, sizeof(query_msg_t));
 			if (qmsg == NULL)
 			{
-				return ;
+				osMutexRelease(snd_mutex);
+				continue ;// Continue for(;;) loop
 			}
 			qmsg->messageID = packet.messageID;
 			qmsg->messageID = packet.senderAddr;
@@ -110,9 +117,9 @@ void send_msg(void *args)
 
 			// Send data packet
 		    comms_set_packet_type(sradio, &m_msg, AMID_SYSTEMCOMMUNICATION);
-		    comms_am_set_destination(sradio, &m_msg, SYSTEM_ID);//TODO resolv system ID value
+		    comms_am_set_destination(sradio, &m_msg, packet.shipAddr); //TODO Dont't forget to set destination
 		    //comms_am_set_source(sradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
-		    comms_set_payload_length(sradio, &m_msg, sizeof(queryMsg));
+		    comms_set_payload_length(sradio, &m_msg, sizeof(query_msg_t));
 
 		    comms_error_t result = comms_send(sradio, &m_msg, radio_send_done, NULL);
 		    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);

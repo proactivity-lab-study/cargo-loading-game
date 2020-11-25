@@ -1,8 +1,8 @@
-# This is the main makefile for cargo loading game crane module firmware
+# This is the main makefile for cargo loading game crane-agent firmware
 
 # _______________________ User overridable configuration _______________________
 
-PROJECT_NAME            ?= clg-game
+PROJECT_NAME            ?= clg-crane-agent
 
 VERSION_MAJOR           ?= 1
 VERSION_MINOR           ?= 0
@@ -82,7 +82,7 @@ NODE_PLATFORM_DIR       := $(ZOO)/thinnect.node-platform
 
 # ______________ Build components - sources and includes _______________________
 
-SOURCES += app_main.c crane_state.c game_state.c
+SOURCES += crane_main.c crane_state.c system_state.c
 
 INCLUDES += -I../common
 

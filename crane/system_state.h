@@ -1,24 +1,20 @@
 /**
- *
+ * 
  * Copyright Proactivity Lab 2020
  *
  * @license MIT
  */
 
-#ifndef GAME_STATE_H_
-#define GAME_STATE_H_
+#ifndef SYSTEM_STATE_H_
+#define SYSTEM_STATE_H_
 
-#define DURATION_OF_GAME 600UL //seconds
-#define DEFAULT_TIME 60
-#define DEFAULT_LOC 13
-
-//ship database
+// Ship database
 typedef struct sdb_t {
 	bool shipInGame;
 	uint8_t shipAddr;
 	uint8_t x_coordinate;
 	uint8_t y_coordinate;
-	uint32_t ltime;
+	uint32_t ltime;	// Cargo loading deadline expressed as Kernel tick count
 	bool isCargoLoaded;
 } sdb_t;
 
@@ -27,18 +23,18 @@ typedef struct sdb_t {
  **********************************************************************************************/
 
 void init_game();
-void init_system(comms_layer_t* radio);
+void init_system(comms_layer_t* radio, am_addr_t my_addr);
 
 /**********************************************************************************************
  *	Message receiving
  **********************************************************************************************/
 
-void system_receive_message (comms_layer_t* comms, const comms_msg_t* msg, void* user);
+void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* user);
 
 /**********************************************************************************************
  *	Utility functions
  **********************************************************************************************/
 
-uint8_t getIndex(uint8_t id);
+uint8_t getIndex(am_addr_t ship_addr);
 
-#endif//GAME_STATE_H_
+#endif//SYSTEM_STATE_H_

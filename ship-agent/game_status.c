@@ -21,43 +21,45 @@
 #define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
 #include "log.h"
 
-typedef struct ship_data_t{ //TODO replace with sdb_t structure??
-	bool shipInGame;
-	am_addr_t shipAdd; 
-	uint16_t departureT;
+typedef struct ship_data_t{
+	bool ship_in_game;
+	am_addr_t ship_addr; 
+	uint16_t ship_deadline;
 	uint8_t x_coordinate;
 	uint8_t y_coordinate;
-	uint8_t isCargoLoaded;
+	uint8_t is_cargo_loaded;
 } ship_data_t;
 
-am_addr_t ship_addr[MAX_SHIPS]; //protected by asdb_mutex
+static am_addr_t ship_addr[MAX_SHIPS]; // Protected by asdb_mutex
 
-ship_data_t ships[MAX_SHIPS]; //protected by sddb_mutex
-ship_data_t my_data; //protected by sddb_mutex
+static ship_data_t ships[MAX_SHIPS]; // Protected by sddb_mutex
+static ship_data_t my_data; // Protected by sddb_mutex
 
-uint32_t global_time_left; //protected by sddb_mutex
+uint32_t global_time_left; // Protected by sddb_mutex
 
 static osMutexId_t sddb_mutex, asdb_mutex, snd_mutex;
 static osMessageQueueId_t snd_msg_qID;
+osThreadId_t wmsg_thread;
 
 static comms_msg_t m_msg;
 static bool m_sending = false;
 static comms_layer_t* sradio;
-am_addr_t my_address;
+static am_addr_t my_address;
+static am_addr_t system_address = AM_BROADCAST_ADDR; // Use actual system address if possible
+static bool first_msg = true; // Used to get actual system address once
 
-bool get_all_ships_data_in_progress = false; //protected by asdb_mutex
+static bool get_all_ships_data_in_progress = false; // Protected by asdb_mutex
 
-void welcome_msg_loop(void *args);
-void send_msg_loop(void *args);
-void get_all_ships_data(void *args);
-void get_all_ships_in_game(void *args);
+static void welcome_msg_loop(void *args);
+static void send_msg_loop(void *args);
+static void get_all_ships_data(void *args);
+static void get_all_ships_in_game(void *args);
 
-osEventFlagsId_t evt_id;
+static osEventFlagsId_t evt_id;
 
 static uint8_t get_empty_slot();
 static uint8_t get_index(am_addr_t addr);
-static void add_ship(queryResponseMsg* ship);
-static void mark_cargo(am_addr_t addr);
+static void add_ship(query_response_msg_t* ship);
 static void add_ship_addr(am_addr_t addr);
 
 
@@ -68,34 +70,35 @@ static void add_ship_addr(am_addr_t addr);
 void init_system_status(comms_layer_t* radio, am_addr_t addr)
 {
 	uint8_t i;
+	const osMutexAttr_t sddb_Mutex_attr = { .attr_bits = osMutexRecursive }; // Allow nesting of this mutex
 
-	sddb_mutex = osMutexNew(NULL);	//protects ships' crane command database
-	asdb_mutex = osMutexNew(NULL);	//protects current crane location values
-	snd_mutex = osMutexNew(NULL);	//protects against sending another message before hardware has handled previous message
-	evt_id = osEventFlagsNew(NULL);	//tells get_all_ships_data to quiery the next ship
+	sddb_mutex = osMutexNew(&sddb_Mutex_attr);	// Protects ships' crane command database
+	asdb_mutex = osMutexNew(NULL);				// Protects current crane location values
+	snd_mutex = osMutexNew(NULL);	// Protects against sending another message before hardware has handled previous message
+	evt_id = osEventFlagsNew(NULL);	// Tells 'get_all_ships_data' task to quiery for the next ship
 
-	snd_msg_qID = osMessageQueueNew(9, sizeof(queryMsg), NULL);
+	snd_msg_qID = osMessageQueueNew(9, sizeof(query_msg_t), NULL);
 	
-	sradio = radio;//this is the only write, so not going to protect it with mutex
-	my_address = addr;//this is the only write, so not going to protect it with mutex
+	sradio = radio; 	// This is the only write, so not going to protect it with mutex
+	my_address = addr; 	// This is the only write, so not going to protect it with mutex
 
-	//initialise ships' buffers
+	// Initialise ships' buffers
 	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 	for(i=0;i<MAX_SHIPS;i++)
 	{
-		ships[i].shipInGame = false;
-		ships[i].shipAdd = 0;
-		ships[i].departureT = 0;
+		ships[i].ship_in_game = false;
+		ships[i].ship_addr = 0;
+		ships[i].ship_deadline = 0;
 		ships[i].x_coordinate = 0;
 		ships[i].y_coordinate = 0;
-		ships[i].isCargoLoaded = false;
+		ships[i].is_cargo_loaded = false;
 	}
-	my_data.shipInGame = false;
-	my_data.shipAdd = 0;
-	my_data.departureT = 0;
+	my_data.ship_in_game = false;
+	my_data.ship_addr = 0;
+	my_data.ship_deadline = 0;
 	my_data.x_coordinate = 0;
 	my_data.y_coordinate = 0;
-	my_data.isCargoLoaded = false;
+	my_data.is_cargo_loaded = false;
 	osMutexRelease(sddb_mutex);
 
 	while(osMutexAcquire(asdb_mutex, 1000) != osOK);
@@ -105,26 +108,25 @@ void init_system_status(comms_layer_t* radio, am_addr_t addr)
 	}
 	osMutexRelease(asdb_mutex);
 
-	osThreadNew(welcome_msg_loop, NULL, NULL);//sends welcome message
+	wmsg_thread = osThreadNew(welcome_msg_loop, NULL, NULL); // Sends welcome message and then stopps
 	osThreadNew(get_all_ships_data, NULL, NULL);
-	osThreadNew(send_msg_loop, NULL, NULL);//sends quiery messages
-	osThreadNew(get_all_ships_in_game, NULL, NULL);//sends AS_QMSG message	
+	osThreadNew(send_msg_loop, NULL, NULL); // Sends quiery messages
+	osThreadNew(get_all_ships_in_game, NULL, NULL); // Sends AS_QMSG message	
 }
 
 /**********************************************************************************************
- *	 some threads
+ *	 Module threads
  *********************************************************************************************/
 
 void get_all_ships_in_game(void *args)
 {
-	queryMsg packet;
-	am_addr_t my_addr = my_address;
+	query_msg_t packet;
 	
 	for(;;)
 	{
-		osDelay(60*osKernelGetTickFreq()); //60 seconds
+		osDelay(60*osKernelGetTickFreq()); // 60 seconds
 		packet.messageID = AS_QMSG;
-		packet.senderAddr = my_addr;
+		packet.senderAddr = my_address;
 		osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
 	}
 }
@@ -132,8 +134,7 @@ void get_all_ships_in_game(void *args)
 void get_all_ships_data(void *args)
 {
 	uint8_t i;
-	queryMsg packet;
-	am_addr_t my_addr = my_address;
+	query_msg_t packet;
 
 	for(;;)
 	{
@@ -141,20 +142,20 @@ void get_all_ships_data(void *args)
 		while(osMutexAcquire(asdb_mutex, 1000) != osOK);
 		for(i=0;i<MAX_SHIPS;i++)
 		{
-			if(ship_addr[i] != 0)
+			if(ship_addr[i] != 0)// TODO maybe also see if we have data for this ship
 			{
 				packet.messageID = SHIP_QMSG;
-				packet.senderAddr = my_addr;
+				packet.senderAddr = my_address;
 				packet.shipAddr = ship_addr[i];
 				ship_addr[i] = 0;
-				osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
 				osMutexRelease(asdb_mutex);
+				osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
 				break;
 			}
 		}
 		if(i >= MAX_SHIPS)
 		{
-			get_all_ships_data_in_progress = false;//done
+			get_all_ships_data_in_progress = false; // Done
 			osMutexRelease(asdb_mutex);
 		}
 	}
@@ -162,19 +163,25 @@ void get_all_ships_data(void *args)
 
 void welcome_msg_loop(void *args)
 {
-	queryMsg packet;
+	query_msg_t packet;
 	for(;;)
 	{
 		while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-		if(my_data.shipInGame != true)
+		if(my_data.ship_in_game != true)
 		{
+			osMutexRelease(sddb_mutex);
 			packet.messageID = WELCOME_MSG;
 			packet.senderAddr = my_address;
 			osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
 		}
-		else ;//TODO delete this thread, cuz no need anymore
-		osMutexRelease(sddb_mutex);
-		osDelay(10*osKernelGetTickFreq()); //10 seconds
+		else 
+		{
+			osMutexRelease(sddb_mutex);
+			// Terminate task, cuz no need for it anymore
+			osThreadTerminate(wmsg_thread);
+		}
+		
+		osDelay(10*osKernelGetTickFreq()); // 10 seconds
 	}
 }
 
@@ -184,19 +191,22 @@ void welcome_msg_loop(void *args)
 
 void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* user)
 {
-	uint8_t nums, i;
+	uint8_t i;
 	am_addr_t dest;
 	uint8_t pl_len = comms_get_payload_length(comms, msg);
-	uint8_t * qmsg = (uint8_t *) comms_get_payload(comms, msg, pl_len);
-	queryResponseMsg * packet;
+	uint8_t * rmsg = (uint8_t *) comms_get_payload(comms, msg, pl_len);
+	query_response_msg_t * packet;
+	query_response_buf_t * bpacket;
+	query_msg_t packet2;
+	
 	//TODO maybe put this all in a separate task, to make this interrupt handler faster
-	switch(qmsg[0])
+	switch(rmsg[0])
 	{
-		//new ship, maybe do something? trigger reminder to ask for new ship?
+		// New ship, maybe do something? trigger reminder to ask for new ship?
 		case WELCOME_MSG :
 		break;
 
-		//query messages, nothing to do
+		// Query messages, nothing to do
 		case GTIME_QMSG :
 		case SHIP_QMSG :
 		case AS_QMSG :
@@ -204,46 +214,73 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			break;
 
 		case GTIME_QRMSG :
-			packet = (queryResponseMsg *) comms_get_payload(comms, msg, sizeof(queryResponseMsg));
+			packet = (query_response_msg_t *) comms_get_payload(comms, msg, sizeof(query_response_msg_t));
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-			global_time_left = packet->departureT;
+			global_time_left = packet->loadingDeadline;
 			osMutexRelease(sddb_mutex);
 			break;
 
 		case WELCOME_RMSG :
-		case SHIP_QRMSG :
-			packet = (queryResponseMsg *) comms_get_payload(comms, msg, sizeof(queryResponseMsg));
+			packet = (query_response_msg_t *) comms_get_payload(comms, msg, sizeof(query_response_msg_t));
+
+			// WELCOME_RMSG should be one of the first ones we receive, so lets put this here
+			if(packet->senderAddr == SYSTEM_ADDR && first_msg)
+			{
+				system_address = comms_am_get_source(comms, msg);
+				first_msg = false;
+			}
+			
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 			add_ship(packet);
 			osMutexRelease(sddb_mutex);
-			while(osMutexAcquire(asdb_mutex, 1000) != osOK);//protects get_all_ships_data_in_progress
+			
 			dest = comms_am_get_destination(comms, msg);
-			if(get_all_ships_data_in_progress && dest == my_address)osEventFlagsSet(evt_id, 0x00000001U);//trigger get_all_ships_data() thread 
+			if(dest == my_address)
+			{
+				packet2.messageID = AS_QMSG;
+				packet2.senderAddr = my_address;
+				osMessageQueuePut(snd_msg_qID, &packet2, 0, 1000);
+			}
+
+			case SHIP_QRMSG :
+			packet = (query_response_msg_t *) comms_get_payload(comms, msg, sizeof(query_response_msg_t));
+			
+			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
+			add_ship(packet);
+			osMutexRelease(sddb_mutex);
+
+			// Trigger get_all_ships_data() task 
+			dest = comms_am_get_destination(comms, msg);
+			while(osMutexAcquire(asdb_mutex, 1000) != osOK);
+			if(get_all_ships_data_in_progress && dest == my_address)osEventFlagsSet(evt_id, 0x00000001U);
 			osMutexRelease(asdb_mutex);
+
 			info1("command rcvd");
 			break;
 
 		case AS_QRMSG :
-			if(qmsg[2] == my_address)//only if I made quiery
+
+			bpacket = (query_response_buf_t *) comms_get_payload(comms, msg, sizeof(query_response_buf_t));
+			if(bpacket->shipAddr == my_address) // Only if I made quiery
 			{
-				nums = qmsg[3];//num of ships in this received message
 				while(osMutexAcquire(asdb_mutex, 1000) != osOK);
-				for(i=0;i<nums;i++)
+				for(i=0;i<bpacket->len;i++)
 				{
-					add_ship_addr(qmsg[4+i]);
+					add_ship_addr(bpacket->ships[i]);
 				}
 				get_all_ships_data_in_progress = true;
 				osMutexRelease(asdb_mutex);
-				osEventFlagsSet(evt_id, 0x00000001U);//trigger get_all_ships_data() thread 
+				osEventFlagsSet(evt_id, 0x00000001U); // Trigger get_all_ships_data() task 
 			}
 			break;
 
 		case ACARGO_QRMSG :
-			nums = qmsg[3];//num of ships in this received message
+
+			bpacket = (query_response_buf_t *) comms_get_payload(comms, msg, sizeof(query_response_buf_t));
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-			for(i=0;i<nums;i++)
+			for(i=0;i<bpacket->len;i++)
 			{
-				mark_cargo(qmsg[4+i]);
+				mark_cargo(bpacket->ships[i]);
 			}
 			osMutexRelease(sddb_mutex);
 			break;
@@ -251,7 +288,6 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 		default:
 			break;
 	}
-	//debug1("rcv-c");
 }
 
 /**********************************************************************************************
@@ -268,18 +304,19 @@ static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_err
 
 void send_msg_loop(void *args)
 {
-	queryMsg packet;
+	query_msg_t packet;
 	for(;;)
 	{
-		osMessageQueueGet(snd_msg_qID, &packet, NULL, osWaitForever);
+		osMessageQueueGet(snd_msg_qID, (query_msg_t*) &packet, NULL, osWaitForever);
 		while(osMutexAcquire(snd_mutex, 1000) != osOK);
 		if(!m_sending)
 		{
 			comms_init_message(sradio, &m_msg);
-			queryMsg * qmsg = comms_get_payload(sradio, &m_msg, sizeof(queryMsg));
+			query_msg_t * qmsg = comms_get_payload(sradio, &m_msg, sizeof(query_msg_t));
 			if (qmsg == NULL)
 			{
-				return ;
+				osMutexRelease(snd_mutex);
+				continue ;// Continue for(;;) loop
 			}
 			qmsg->messageID = packet.messageID;
 			qmsg->messageID = packet.senderAddr;
@@ -287,9 +324,9 @@ void send_msg_loop(void *args)
 
 			// Send data packet
 		    comms_set_packet_type(sradio, &m_msg, AMID_SYSTEMCOMMUNICATION);
-		    comms_am_set_destination(sradio, &m_msg, SYSTEM_ID);//TODO resolv system ID value
+		    comms_am_set_destination(sradio, &m_msg, system_address);
 		    //comms_am_set_source(sradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
-		    comms_set_payload_length(sradio, &m_msg, sizeof(queryMsg));
+		    comms_set_payload_length(sradio, &m_msg, sizeof(query_msg_t));
 
 		    comms_error_t result = comms_send(sradio, &m_msg, radio_send_done, NULL);
 		    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
@@ -305,15 +342,80 @@ void send_msg_loop(void *args)
 /**********************************************************************************************
  *	Utility functions
  **********************************************************************************************/
+
+// Returns location of ship, if no such ship, returns 0 for both coordinates.
+// This function can block for 1000 kernel ticks.
 loc_bundle_t get_ship_location(am_addr_t ship_addr)
 {
-	//TODO add functionality to return location of ship with ship_addr address
-	loc_bundle_t mloc;
+	loc_bundle_t sloc;
+	uint8_t ndx;
+	
+	sloc.x = sloc.y = 0;
 	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-	mloc.x = my_data.x_coordinate;
-	mloc.y = my_data.y_coordinate;
+	if(ship_addr == my_address)
+	{
+		sloc.x = my_data.x_coordinate;
+		sloc.y = my_data.y_coordinate;
+	}
+	else
+	{
+		ndx = get_index(ship_addr);
+		sloc.x = ships[ndx].x_coordinate;
+		sloc.y = ships[ndx].y_coordinate;
+	}
 	osMutexRelease(sddb_mutex);
-	return mloc;
+	return sloc;
+}
+
+// Returns address of ship in location 'sloc' or 0 if no ship in this location.
+// This function can block for 1000 kernel ticks.
+am_addr_t get_ship_addr(loc_bundle_t sloc)
+{
+	am_addr_t addr = 0;
+	uint8_t i;
+
+	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
+	for(i=0;i<MAX_SHIPS;i++)
+	{
+		if(ships[i].x_coordinate == sloc.x && ships[i].y_coordinate == sloc.y && ships[i].ship_in_game)	
+		{
+			addr = ships[i].ship_addr;
+			break;
+		}
+	}
+	osMutexRelease(sddb_mutex);
+	return addr;
+}
+
+// Fills buffer pointed to by 'saddr' with addresses of all ships currently known.
+// Returns number of ships added to buffer 'saddr'.
+// This function can block for 1000 kernel ticks.
+uint8_t get_all_ships_addr(am_addr_t saddr[], uint8_t mlen)
+{
+	uint8_t i, len = 0;
+
+	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
+	for(i=0;i<MAX_SHIPS;i++)
+	{
+		if(ships[i].ship_in_game && len < mlen)saddr[len++] = ships[i].ship_addr;
+	}
+	osMutexRelease(sddb_mutex);
+	return len;
+}
+
+// Marks cargo status as true for ship with address 'addr', if such a ship is found.
+// Use with care! There is no revers command to mark cargo status false.
+// This function can block for 1000 kernel ticks.
+void mark_cargo(am_addr_t addr)
+{
+	uint8_t i;
+	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
+	for(i=0;i<MAX_SHIPS;i++)if(ships[i].ship_addr == addr && ships[i].ship_in_game)
+	{
+		ships[i].is_cargo_loaded = true;
+		break;
+	}
+	osMutexRelease(sddb_mutex);
 }
 
 static uint8_t get_empty_slot()
@@ -321,7 +423,7 @@ static uint8_t get_empty_slot()
 	uint8_t k;
 	for(k=0;k<MAX_SHIPS;k++)
 	{
-		if(ships[k].shipInGame == false)break;
+		if(ships[k].ship_in_game == false)break;
 	}
 	return k;
 }
@@ -331,7 +433,7 @@ static uint8_t get_index(am_addr_t addr)
 	uint8_t k;
 	for(k=0;k<MAX_SHIPS;k++)
 	{
-		if(ships[k].shipInGame == true && ships[k].shipAdd == addr)break;
+		if(ships[k].ship_in_game && ships[k].ship_addr == addr)break;
 	}
 	return k;
 }
@@ -340,7 +442,7 @@ static void add_ship_addr(am_addr_t addr)
 {
 	uint8_t i;
 
-	for(i=0;i<MAX_SHIPS;i++)if(ship_addr[i] == addr)break;//check that we don't add double ships
+	for(i=0;i<MAX_SHIPS;i++)if(ship_addr[i] == addr)break; // Check that we don't add double ships
 
 	if(i>=MAX_SHIPS)
 	{
@@ -350,36 +452,21 @@ static void add_ship_addr(am_addr_t addr)
 			break;
 		}
 	}
-	else ; //this ship is already in database
+	else ; // This ship is already in database
 }
 
-static void mark_cargo(am_addr_t addr)
-{
-	uint8_t i;
-	for(i=0;i<MAX_SHIPS;i++)if(ships[i].shipAdd == addr && ships[i].shipInGame == true)
-	{
-		ships[i].isCargoLoaded = true;
-		break;
-	}
-}
-
-static void add_ship(queryResponseMsg* ship)
+static void add_ship(query_response_msg_t* ship)
 {
 	uint8_t ndx;
-	queryMsg packet;
+	
 	if(ship->shipAddr == my_address)
 	{
-		my_data.shipInGame = true;
-		my_data.shipAdd = ship->shipAddr;
-		my_data.departureT = ship->departureT;
+		my_data.ship_in_game = true;
+		my_data.ship_addr = ship->shipAddr;
+		my_data.ship_deadline = ship->loadingDeadline;
 		my_data.x_coordinate = ship->x_coordinate;
 		my_data.y_coordinate = ship->y_coordinate;
-		my_data.isCargoLoaded = ship->isCargoLoaded;
-		
-		//now ask for a list of all ships in game		
-		packet.messageID = AS_QMSG;
-		packet.senderAddr = my_address;
-		osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
+		my_data.is_cargo_loaded = ship->isCargoLoaded;
 	}
 	else
 	{
@@ -389,18 +476,18 @@ static void add_ship(queryResponseMsg* ship)
 			ndx = get_empty_slot();
 			if(ndx < MAX_SHIPS)
 			{
-				ships[ndx].shipInGame = true;
-				ships[ndx].shipAdd = ship->shipAddr;
-				ships[ndx].departureT = ship->departureT;
+				ships[ndx].ship_in_game = true;
+				ships[ndx].ship_addr = ship->shipAddr;
+				ships[ndx].ship_deadline = ship->loadingDeadline;
 				ships[ndx].x_coordinate = ship->x_coordinate;
 				ships[ndx].y_coordinate = ship->y_coordinate;
-				ships[ndx].isCargoLoaded = ship->isCargoLoaded;
+				ships[ndx].is_cargo_loaded = ship->isCargoLoaded;
 			}
-			else ; //no room
+			else ; // No room
 		}
-		else //already got this ship, update only cargo status
+		else // Already got this ship, update only cargo status
 		{
-			ships[ndx].isCargoLoaded = ship->isCargoLoaded;
+			ships[ndx].is_cargo_loaded = ship->isCargoLoaded;
 		}
 	}
 }
