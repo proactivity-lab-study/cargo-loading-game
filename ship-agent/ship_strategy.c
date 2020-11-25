@@ -31,6 +31,7 @@
 #include "log.h"
 
 #define START_COOP_MSG_ID 130
+#define ANS_COOP_MSG_ID 131
 
 static osMutexId_t snd_mutex;
 static osMessageQueueId_t snd_msg_qID;
@@ -56,12 +57,13 @@ void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 {
 	snd_mutex = osMutexNew(NULL); // Protects against sending message before hardware has handled previous message
 	
-	snd_msg_qID = osMessageQueueNew(9, sizeof(query_msg_t), NULL);
+	snd_msg_qID = osMessageQueueNew(9, 15, NULL);// Queue size 15 bytes
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	//This is the only write, so not going to protect it with mutex
 
-	osThreadNew(start_coop, NULL, NULL);//sends welcome message
+	osThreadNew(start_coop, NULL, NULL); // Sends welcome message
+	osThreadNew(send_msg, NULL, NULL); // Sends welcome message
 }
 
 /**********************************************************************************************
@@ -78,12 +80,12 @@ static void start_coop(void *args)
 		osDelay(10*osKernelGetTickFreq()); //10 seconds
 		if(!no_coop)
 		{
+			info1("start snd coop");
 			cmsg.messageID = START_COOP_MSG_ID;
 			cmsg.senderAddr = my_address;
 			dest = get_nearest_n();
 			cmsg.destinationAddr = dest;
-
-			//TODO put msg to queue
+			osMessageQueuePut(snd_msg_qID, &cmsg, 0, 0);
 		}
 	}
 }
@@ -96,8 +98,51 @@ void ship2ship_receive_message(comms_layer_t* comms, const comms_msg_t* msg, voi
 {
 	uint8_t pl_len = comms_get_payload_length(comms, msg);
 	uint8_t * rmsg = (uint8_t *) comms_get_payload(comms, msg, pl_len);
-	
-	info1("rcvd");
+	am_addr_t nearest;
+	coop_msg_ans_t amsg;
+
+	switch(rmsg[0])
+	{
+		case START_COOP_MSG_ID :
+			info1("rcvd start");
+			coop_msg_t * start = (coop_msg_t *) comms_get_payload(comms, msg, pl_len);
+			nearest = get_nearest_n();
+			if(nearest == start->senderAddr)
+			{
+				amsg.agreement = true;
+				info1("agree");
+			}
+			else
+			{
+				amsg.agreement = false;
+				info1("no dice");
+			}
+
+			amsg.messageID = ANS_COOP_MSG_ID;
+			amsg.senderAddr = my_address;
+			amsg.destinationAddr = start->senderAddr;
+			
+			osMessageQueuePut(snd_msg_qID, &amsg, 0, 0);
+
+			break;
+
+		case ANS_COOP_MSG_ID :
+			info1("rcvd ans");
+			coop_msg_ans_t * ans = (coop_msg_ans_t *)comms_get_payload(comms, msg, pl_len);
+			nearest = get_nearest_n();
+			if(nearest == ans->senderAddr)
+			{
+				if(ans->agreement)
+				{
+					//good, start coop
+					info1("coop OK!");
+				}
+			}
+			break;
+
+		default:
+			break;
+	}
 }
 
 /**********************************************************************************************
@@ -114,7 +159,11 @@ static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_err
 
 static void send_msg(void *args)
 {
-	query_msg_t packet;
+	uint8_t packet[15], len;
+	coop_msg_ans_t *acoop_p;
+	coop_msg_t *coop_p;
+	am_addr_t dest;
+
 	for(;;)
 	{
 		osMessageQueueGet(snd_msg_qID, &packet, NULL, osWaitForever);
@@ -122,21 +171,54 @@ static void send_msg(void *args)
 		if(!m_sending)
 		{
 			comms_init_message(sradio, &m_msg);
-			query_msg_t * qmsg = comms_get_payload(sradio, &m_msg, sizeof(query_msg_t));
-			if (qmsg == NULL)
-			{
-				osMutexRelease(snd_mutex);
-				continue ;// Continue for(;;) loop
-			}
-			qmsg->messageID = packet.messageID;
-			qmsg->messageID = packet.senderAddr;
-			qmsg->messageID = packet.shipAddr;
 
+			switch(packet[0])
+			{
+				case START_COOP_MSG_ID :
+					info1("snd coop");
+					coop_msg_t * smsg = comms_get_payload(sradio, &m_msg, sizeof(coop_msg_t));
+					if (smsg == NULL)
+					{
+						osMutexRelease(snd_mutex);
+						continue ;// Continue for(;;) loop
+					}
+					coop_p = (coop_msg_t*)packet;
+					smsg->messageID = coop_p->messageID;
+					smsg->senderAddr = coop_p->senderAddr;
+					smsg->destinationAddr = coop_p->destinationAddr;
+					dest = coop_p->destinationAddr;
+					len = sizeof(coop_msg_t);
+
+					break;
+
+				case ANS_COOP_MSG_ID : 
+					info1("snd ans");
+					coop_msg_ans_t * qmsg = comms_get_payload(sradio, &m_msg, sizeof(coop_msg_ans_t));
+					if (qmsg == NULL)
+					{
+						osMutexRelease(snd_mutex);
+						continue ;// Continue for(;;) loop
+					}
+					acoop_p = (coop_msg_ans_t*)packet;
+
+					qmsg->messageID = acoop_p->messageID;
+					qmsg->senderAddr = acoop_p->senderAddr;
+					qmsg->destinationAddr = acoop_p->destinationAddr;
+					qmsg->agreement = acoop_p->agreement;
+					dest = acoop_p->destinationAddr;
+					len = sizeof(coop_msg_ans_t);
+
+					break;
+
+				default:
+					break;
+			}
+			
 			// Send data packet
-		    comms_set_packet_type(sradio, &m_msg, AMID_SYSTEMCOMMUNICATION);
-		    comms_am_set_destination(sradio, &m_msg, packet.shipAddr); //TODO Dont't forget to set destination
+		    comms_set_packet_type(sradio, &m_msg, AMID_SHIPCOMMUNICATION);
+		    comms_am_set_destination(sradio, &m_msg, dest); //TODO Dont't forget to set destination
 		    //comms_am_set_source(sradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
-		    comms_set_payload_length(sradio, &m_msg, sizeof(query_msg_t));
+		    comms_set_payload_length(sradio, &m_msg, len);
 
 		    comms_error_t result = comms_send(sradio, &m_msg, radio_send_done, NULL);
 		    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
