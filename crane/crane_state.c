@@ -72,11 +72,11 @@
 static uint8_t cmd_buf[MAX_SHIPS]; // Buffer to store received commands
 static crane_location_t cloc;
 
-static osMutexId_t cmdb_mutex, cloc_mutex, snd_mutex;
+static osMutexId_t cmdb_mutex, cloc_mutex;
 static osMessageQueueId_t smsg_qID, rmsg_qID;
+static osThreadId_t snd_task_id;
 
 static comms_msg_t m_msg;
-static bool m_sending = false;
 static comms_layer_t* cradio;
 static am_addr_t my_address;
 
@@ -98,8 +98,7 @@ void init_crane(comms_layer_t* radio, am_addr_t my_addr)
 
 	cmdb_mutex = osMutexNew(NULL); // Protects received ship command database
 	cloc_mutex = osMutexNew(NULL); // Protects current crane location values
-	snd_mutex = osMutexNew(NULL); // Protects against sending another message before hardware has handled previous message
-	
+		
 	smsg_qID = osMessageQueueNew(9, sizeof(crane_location_msg_t), NULL);
 	rmsg_qID = osMessageQueueNew(9, sizeof(crane_command_msg_t), NULL);
 	
@@ -120,7 +119,7 @@ void init_crane(comms_layer_t* radio, am_addr_t my_addr)
 
     osThreadNew(incomingMsgHandler, NULL, NULL);	// Handles received messages 
 	osThreadNew(craneMainLoop, NULL, NULL);		// Crane state changes
-	osThreadNew(sendLocationMsg, NULL, NULL);	// Sends crane location info
+	snd_task_id = osThreadNew(sendLocationMsg, NULL, NULL);	// Sends crane location info
 }
 
 void init_crane_loc()
@@ -233,9 +232,7 @@ static void incomingMsgHandler(void *args)
 static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
     logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
-    while(osMutexAcquire(snd_mutex, 1000) != osOK);
-    m_sending = false;
-    osMutexRelease(snd_mutex);
+	osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
 static void sendLocationMsg(void *args)
@@ -245,37 +242,30 @@ static void sendLocationMsg(void *args)
 	for(;;)
 	{
 		osMessageQueueGet(smsg_qID, (crane_location_msg_t*) &packet, NULL, osWaitForever);
-		while(osMutexAcquire(snd_mutex, 1000) != osOK);
-		if(!m_sending)
+
+		osThreadFlagsWait(0x00000001U, osFlagsWaitAny, osWaitForever); // Flags are automatically cleared
+
+		comms_init_message(cradio, &m_msg);
+		crane_location_msg_t * cLMsg = comms_get_payload(cradio, &m_msg, sizeof(crane_location_msg_t));
+		if (cLMsg == NULL)
 		{
-			comms_init_message(cradio, &m_msg);
-			crane_location_msg_t * cLMsg = comms_get_payload(cradio, &m_msg, sizeof(crane_location_msg_t));
-			if (cLMsg == NULL)
-			{
-				osMutexRelease(snd_mutex);
-				continue ;// Continue for(;;) loop
-			}
-
-			cLMsg->messageID = CRANE_LOCATION_MSG;
-			cLMsg->senderAddr = CRANE_ADDR;
-			cLMsg->x_coordinate = packet.x_coordinate;
-			cLMsg->y_coordinate = packet.y_coordinate;
-			cLMsg->cargoPlaced = packet.cargoPlaced;
-				
-			// Send data packet
-		    comms_set_packet_type(cradio, &m_msg, AMID_CRANECOMMUNICATION);
-		    comms_am_set_destination(cradio, &m_msg, AM_BROADCAST_ADDR);
-		    //comms_am_set_source(cradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
-		    comms_set_payload_length(cradio, &m_msg, sizeof(crane_location_msg_t));
-
-		    comms_error_t result = comms_send(cradio, &m_msg, radio_send_done, NULL);
-		    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
-		    if (COMMS_SUCCESS == result)
-		    {
-		        m_sending = true;
-		    }
+			continue ;// Continue for(;;) loop
 		}
-		osMutexRelease(snd_mutex);
+
+		cLMsg->messageID = CRANE_LOCATION_MSG;
+		cLMsg->senderAddr = CRANE_ADDR;
+		cLMsg->x_coordinate = packet.x_coordinate;
+		cLMsg->y_coordinate = packet.y_coordinate;
+		cLMsg->cargoPlaced = packet.cargoPlaced;
+			
+		// Send data packet
+	    comms_set_packet_type(cradio, &m_msg, AMID_CRANECOMMUNICATION);
+	    comms_am_set_destination(cradio, &m_msg, AM_BROADCAST_ADDR);
+	    //comms_am_set_source(cradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
+	    comms_set_payload_length(cradio, &m_msg, sizeof(crane_location_msg_t));
+
+	    comms_error_t result = comms_send(cradio, &m_msg, radio_send_done, NULL);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
 	}
 }
 

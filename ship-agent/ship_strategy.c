@@ -29,11 +29,10 @@
 #define __LOG_LEVEL__ (LOG_LEVEL_ship_strategy & BASE_LOG_LEVEL)
 #include "log.h"
 
-static osMutexId_t snd_mutex;
 static osMessageQueueId_t snd_msg_qID;
+static osThreadId_t snd_task_id;
 
 static comms_msg_t m_msg;
-static bool m_sending = false;
 static comms_layer_t* sradio;
 static am_addr_t my_address;
 
@@ -46,14 +45,13 @@ static void send_msg(void *args);
 
 void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 {
-	snd_mutex = osMutexNew(NULL); // Protects against sending message before hardware has handled previous message
-	
 	snd_msg_qID = osMessageQueueNew(9, sizeof(query_msg_t), NULL);
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	//This is the only write, so not going to protect it with mutex
 
-	osThreadNew(not_much, NULL, NULL); // Sends welcome message
+	osThreadNew(not_much, NULL, NULL); // Empty thread
+	snd_task_id = osThreadNew(send_msg, NULL, NULL); // Sends messages
 }
 
 /**********************************************************************************************
@@ -89,9 +87,7 @@ void ship2ship_receive_message(comms_layer_t* comms, const comms_msg_t* msg, voi
 static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
     logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
-    while(osMutexAcquire(snd_mutex, 1000) != osOK);
-    m_sending = false;
-    osMutexRelease(snd_mutex);
+    osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
 static void send_msg(void *args)
@@ -100,34 +96,27 @@ static void send_msg(void *args)
 	for(;;)
 	{
 		osMessageQueueGet(snd_msg_qID, &packet, NULL, osWaitForever);
-		while(osMutexAcquire(snd_mutex, 1000) != osOK);
-		if(!m_sending)
+	
+		osThreadFlagsWait(0x00000001U, osFlagsWaitAny, osWaitForever); // Flags are automatically cleared
+
+		comms_init_message(sradio, &m_msg);
+		query_msg_t * qmsg = comms_get_payload(sradio, &m_msg, sizeof(query_msg_t));
+		if (qmsg == NULL)
 		{
-			comms_init_message(sradio, &m_msg);
-			query_msg_t * qmsg = comms_get_payload(sradio, &m_msg, sizeof(query_msg_t));
-			if (qmsg == NULL)
-			{
-				osMutexRelease(snd_mutex);
-				continue ;// Continue for(;;) loop
-			}
-			qmsg->messageID = packet.messageID;
-			qmsg->messageID = packet.senderAddr;
-			qmsg->messageID = packet.shipAddr;
-
-			// Send data packet
-		    comms_set_packet_type(sradio, &m_msg, AMID_SYSTEMCOMMUNICATION);
-		    comms_am_set_destination(sradio, &m_msg, packet.shipAddr); //TODO Dont't forget to set destination
-		    //comms_am_set_source(sradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
-		    comms_set_payload_length(sradio, &m_msg, sizeof(query_msg_t));
-
-		    comms_error_t result = comms_send(sradio, &m_msg, radio_send_done, NULL);
-		    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
-		    if (COMMS_SUCCESS == result)
-		    {
-		        m_sending = true;
-		    }
+			continue ;// Continue for(;;) loop
 		}
-		osMutexRelease(snd_mutex);
+		qmsg->messageID = packet.messageID;
+		qmsg->messageID = packet.senderAddr;
+		qmsg->messageID = packet.shipAddr;
+
+		// Send data packet
+	    comms_set_packet_type(sradio, &m_msg, AMID_SYSTEMCOMMUNICATION);
+	    comms_am_set_destination(sradio, &m_msg, packet.shipAddr); //TODO Dont't forget to set destination
+	    //comms_am_set_source(sradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
+	    comms_set_payload_length(sradio, &m_msg, sizeof(query_msg_t));
+
+	    comms_error_t result = comms_send(sradio, &m_msg, radio_send_done, NULL);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
 	}
 }
 
