@@ -1,8 +1,8 @@
-# This is the main makefile for RadioCountToLeds firmware
+# This is the main makefile for cargo loading game ship-agent firmware
 
 # _______________________ User overridable configuration _______________________
 
-PROJECT_NAME            ?= ship-agent
+PROJECT_NAME            ?= clg-ship-agent
 
 VERSION_MAJOR           ?= 1
 VERSION_MINOR           ?= 0

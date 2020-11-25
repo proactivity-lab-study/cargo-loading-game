@@ -1,5 +1,52 @@
 /**
+ * 
+ * This is the crane module of crane-agent. It is responsible for keeping and
+ * updating crane state (i.e. crane location). Crane state is updated every 
+ * CRANE_UPDATE_INTERVAL seconds. During this interval ships can send their 
+ * movement commands to the crane. At the end of the interval a winning 
+ * command is chosen from all received commands and crane location is updated
+ * according to the winning command.
+ * 
+ * The main functionality of this module is to:
+ * - keep track of and update crane state
+ * - receive movement command messages from ships
+ * - store movement commands per ship until the end of update interval
+ * - receive crane location request messages from ships
+ * - send out crane location messages
+ * 
+ * 
+ * During crane update interval all ships can send their movement commands
+ * to the crane. A correct movement command is one of CM_UP, CM_DOWN, CM_LEFT 
+ * CM_RIGHT, CM_PLACE_CARGO, CM_CURRENT_LOCATION. Each will request the crane
+ * to move one step up, down, left, right or place cargo in current location 
+ * respectively. CM_CURRENT_LOCATION asks the crane to send its current location
+ * and whether there is cargo in this location. This messages is sent immediately.
+ * 
+ * Crane stores one command per ship until the end of the update interval. Each
+ * ship can send as many commands as it wants to (including changing the command)
+ * but only the last received command is stored and later processed. 
+ * 
+ * When the update event occures, crane processes all received commands and
+ * selects a winning command. The winning command is always the most popular 
+ * choice, i.e. the command that was requested the most during this round. In
+ * case of a tie the winning command is randomly chosen from the two (or several)
+ * most popular requests. If no movement commands where received, no winning 
+ * command is chosen. Then all received commands are erased in preparation for
+ * the next update interval.
+ * 
+ * After the winning command is chosen crane changes its state (changes location)
+ * according to the command. If the winning command was to place cargo, then 
+ * crane places cargo in the current location and the new state reflects the 
+ * current location but now with cargo placed in this location. The new state 
+ * (new location and cargo placement status) is then broadcasted to everybody 
+ * and receivement of movement commands commences.
+ * 
+ * If the crane is asked to exit the game area (see GRID_LOWER_BOUND and
+ * GRID_UPPER_BOUND in game_types.h) then crane location is not changed but
+ * a new state messages is still broadcast with the current (unchanged) 
+ * location.
  *
+ * 
  * Copyright Proactivity Lab 2020
  *
  * @license MIT
@@ -12,72 +59,77 @@
 #include "mist_comm_am.h"
 #include "radio.h"
 
-#include "game_state.h"
+#include "system_state.h"
 #include "crane_state.h"
 #include "clg_comm.h"
 #include "game_types.h"
 
 #include "loglevels.h"
 #define __MODUUL__ "crane"
-#define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
+#define __LOG_LEVEL__ (LOG_LEVEL_crane_state & BASE_LOG_LEVEL)
 #include "log.h"
 
-uint8_t cmd_buf[MAX_SHIPS];//buffer to store commands received
-crane_location_t cloc;
+static uint8_t cmd_buf[MAX_SHIPS]; // Buffer to store received commands
+static crane_location_t cloc;
 
 static osMutexId_t cmdb_mutex, cloc_mutex, snd_mutex;
-static osMessageQueueId_t msg_qID;
+static osMessageQueueId_t smsg_qID, rmsg_qID;
 
 static comms_msg_t m_msg;
 static bool m_sending = false;
 static comms_layer_t* cradio;
+static am_addr_t my_address;
 
-void message_handler_loop(void *args);
-void crane_main_loop(void *args);
-static uint8_t get_winning_cmd();
+static void incomingMsgHandler(void *args);
+static void craneMainLoop(void *args);
+static void sendLocationMsg(void *args);
+
+static uint8_t getWinningCmd();
 static uint8_t doCommand(uint8_t wcmd);
-static void sendLoc(am_addr_t destination, uint8_t x, uint8_t y, bool isCargoLoaded);
 static uint32_t randomNumber(uint32_t rndL, uint32_t rndH);
 
 /**********************************************************************************************
  *	Initialise module
  **********************************************************************************************/
 
-void init_crane(comms_layer_t* radio)
+void init_crane(comms_layer_t* radio, am_addr_t my_addr)
 {
 	uint8_t i;
 
-	cmdb_mutex = osMutexNew(NULL);	//protects received ship command database
-	cloc_mutex = osMutexNew(NULL);	//protects current crane location values
-	snd_mutex = osMutexNew(NULL);	//protects against sending another message before hardware has handled previous message
+	cmdb_mutex = osMutexNew(NULL); // Protects received ship command database
+	cloc_mutex = osMutexNew(NULL); // Protects current crane location values
+	snd_mutex = osMutexNew(NULL); // Protects against sending another message before hardware has handled previous message
 	
-	msg_qID = osMessageQueueNew(6, sizeof(craneCommandMsg), NULL);
+	smsg_qID = osMessageQueueNew(9, sizeof(crane_location_msg_t), NULL);
+	rmsg_qID = osMessageQueueNew(9, sizeof(crane_command_msg_t), NULL);
 	
-	//initialise buffer
+	// Initialise buffer
 	while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
 	for(i=0;i<MAX_SHIPS;i++)cmd_buf[i] = 0;
 	osMutexRelease(cmdb_mutex);
 
 	cradio = radio;
+	my_address = my_addr;
 
-	//get crane start location
+	// Crane default location
 	while(osMutexAcquire(cloc_mutex, 1000) != osOK);
-	cloc.craneY = 0;
-	cloc.craneX = 0;
-	cloc.cargoInCurrentLoc = false;
+	cloc.crane_y = 0;
+	cloc.crane_x = 0;
+	cloc.cargo_here = false;
 	osMutexRelease(cloc_mutex);
 
-    osThreadNew(message_handler_loop, NULL, NULL);	//handles received messages and sends crane location info
-	osThreadNew(crane_main_loop, NULL, NULL);	//crane state changes
-	
+    osThreadNew(incomingMsgHandler, NULL, NULL);	// Handles received messages 
+	osThreadNew(craneMainLoop, NULL, NULL);		// Crane state changes
+	osThreadNew(sendLocationMsg, NULL, NULL);	// Sends crane location info
 }
 
 void init_crane_loc()
 {
+	// Get crane start location
 	while(osMutexAcquire(cloc_mutex, 1000) != osOK)
-	cloc.craneY = randomNumber(GRID_LOWER_BOUND, GRID_UPPER_BOUND);
-	cloc.craneX = randomNumber(GRID_LOWER_BOUND, GRID_UPPER_BOUND);
-	cloc.cargoInCurrentLoc = false;
+	cloc.crane_y = randomNumber(GRID_LOWER_BOUND, GRID_UPPER_BOUND);
+	cloc.crane_x = randomNumber(GRID_LOWER_BOUND, GRID_UPPER_BOUND);
+	cloc.cargo_here = false;
 	osMutexRelease(cloc_mutex);
 }
 
@@ -85,27 +137,29 @@ void init_crane_loc()
  *	Crane status changes
  *********************************************************************************************/
 
-void crane_main_loop(void *args)
+static void craneMainLoop(void *args)
 {
 	uint8_t wcmd;
-	crane_location_t sloc;
-	const uint32_t delay_ticks = (uint32_t)(CRANE_UPDATE_INTERVAL * osKernelGetTickFreq());
+	static crane_location_msg_t sloc;
+	const uint32_t delay_ticks = (uint32_t)CRANE_UPDATE_INTERVAL * osKernelGetTickFreq();
 	for(;;)
 	{
 		osDelay(delay_ticks);
-		wcmd = get_winning_cmd();
+		wcmd = getWinningCmd();
 		if(wcmd > 0)
 		{
 			while(osMutexAcquire(cloc_mutex, 1000) != osOK);
 			if(!doCommand(wcmd))
 			{
-				sloc.craneY = cloc.craneY;
-				sloc.craneX = cloc.craneX;
-				sloc.cargoInCurrentLoc = cloc.cargoInCurrentLoc;
-				sendLoc(AM_BROADCAST_ADDR, sloc.craneX, sloc.craneY, sloc.cargoInCurrentLoc);
-				info1("new location x y");
+				sloc.messageID = CRANE_LOCATION_MSG;
+				sloc.senderAddr = my_address;
+				sloc.x_coordinate = cloc.crane_x;
+				sloc.y_coordinate = cloc.crane_y;
+				sloc.cargoPlaced = cloc.cargo_here;
+				osMessageQueuePut(smsg_qID, &sloc, 0, 0);
 			}
 			osMutexRelease(cloc_mutex);
+			info1("New loc %u %u %u", sloc.x_coordinate, sloc.y_coordinate, sloc.cargoPlaced);
 		}
 	}
 }
@@ -116,40 +170,46 @@ void crane_main_loop(void *args)
 
 void crane_receive_message (comms_layer_t* comms, const comms_msg_t* msg, void* user)
 {
-	if (comms_get_payload_length(comms, msg) >= sizeof(craneCommandMsg))
+	if (comms_get_payload_length(comms, msg) >= sizeof(crane_command_msg_t))
     {
-        craneCommandMsg * packet = (craneCommandMsg*)comms_get_payload(comms, msg, sizeof(craneCommandMsg));
-        debug1("rcv");
-        osStatus_t err = osMessageQueuePut(msg_qID, packet, 0, 0);
+        crane_command_msg_t * packet = (crane_command_msg_t*)comms_get_payload(comms, msg, sizeof(crane_command_msg_t));
+        info1("Rcv cmnd");
+        osStatus_t err = osMessageQueuePut(rmsg_qID, packet, 0, 0);
 		if(err == osOK)info1("rc query");
 		else warn1("msgq err");
     }
     else warn1("rcv size %d", (unsigned int)comms_get_payload_length(comms, msg));
 }
 
-void message_handler_loop(void *args)
+static void incomingMsgHandler(void *args)
 {
 	uint8_t index, cmd;
-	crane_location_t sloc;
-	craneCommandMsg packet;
+	crane_location_msg_t sloc;
+	crane_command_msg_t packet;
 
 	for(;;)
 	{
-		osMessageQueueGet(msg_qID, &packet, NULL, osWaitForever);
+		osMessageQueueGet(rmsg_qID, &packet, NULL, osWaitForever);
 		if(packet.messageID == CRANE_COMMAND_MSG)
 		{
+			info("Rcvd %u %u", packet.senderAddr, packet.cmd);
 			cmd = packet.cmd;
 			if(cmd == CM_CURRENT_LOCATION)
 			{
 				while(osMutexAcquire(cloc_mutex, 1000) != osOK);
-				sloc.craneY = cloc.craneY;
-				sloc.craneX = cloc.craneX;
-				sloc.cargoInCurrentLoc = cloc.cargoInCurrentLoc;
+				sloc.messageID = CRANE_LOCATION_MSG;
+				sloc.senderAddr = my_address;
+				sloc.x_coordinate = cloc.crane_x;
+				sloc.y_coordinate = cloc.crane_y;
+				sloc.cargoPlaced = cloc.cargo_here;
 				osMutexRelease(cloc_mutex);
-				sendLoc(packet.senderAddr, sloc.craneX, sloc.craneY, sloc.cargoInCurrentLoc);
+				osMessageQueuePut(smsg_qID, &sloc, 0, 0);
 			}
 			else if(cmd > 0 && cmd < CM_CURRENT_LOCATION)
 			{
+				// Each ship has a designated memory area in the buffer
+				// because if a ship sends multiple commands during a
+				// crane update interval, only the last must be used.
 				index = getIndex(packet.senderAddr);
 				if(index < MAX_SHIPS)
 				{
@@ -158,10 +218,10 @@ void message_handler_loop(void *args)
 					osMutexRelease(cmdb_mutex);
 					info1("cmd rcv");
 				}
-				else ;//ship not in game, command dropped
+				else ;// Ship not in game, command dropped
 			}
-			else if(cmd == CM_NOTHING_TO_DO) ; //this command shouldn't be sent, but no harm done, just ignore
-			else ;//invalid command, do nothing
+			else if(cmd == CM_NOTHING_TO_DO) ; // This command shouldn't be sent, but no harm done, just ignore
+			else ; // Invalid command, do nothing
 		}
 	}
 }
@@ -178,53 +238,59 @@ static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_err
     osMutexRelease(snd_mutex);
 }
 
-static void sendLoc(am_addr_t destination, uint8_t x, uint8_t y, bool isCargoLoaded)
+static void sendLocationMsg(void *args)
 {
-	while(osMutexAcquire(snd_mutex, 1000) != osOK);
-	if(!m_sending)
+	crane_location_msg_t packet;
+
+	for(;;)
 	{
-		comms_init_message(cradio, &m_msg);
-		craneLocationMsg * cLMsg = comms_get_payload(cradio, &m_msg, sizeof(craneLocationMsg));
-		if (cLMsg == NULL)
+		osMessageQueueGet(smsg_qID, (crane_location_msg_t*) &packet, NULL, osWaitForever);
+		while(osMutexAcquire(snd_mutex, 1000) != osOK);
+		if(!m_sending)
 		{
-			return ;
-		}
+			comms_init_message(cradio, &m_msg);
+			crane_location_msg_t * cLMsg = comms_get_payload(cradio, &m_msg, sizeof(crane_location_msg_t));
+			if (cLMsg == NULL)
+			{
+				osMutexRelease(snd_mutex);
+				continue ;// Continue for(;;) loop
+			}
 
-		cLMsg->messageID = CRANE_LOCATION_MSG;
-		cLMsg->senderAddr = SYSTEM_ID;
-		cLMsg->x_coordinate = x;
-		cLMsg->y_coordinate = y;
-		cLMsg->cargoPlaced = isCargoLoaded;
+			cLMsg->messageID = CRANE_LOCATION_MSG;
+			cLMsg->senderAddr = CRANE_ADDR;
+			cLMsg->x_coordinate = packet.x_coordinate;
+			cLMsg->y_coordinate = packet.y_coordinate;
+			cLMsg->cargoPlaced = packet.cargoPlaced;
 				
-		// Send data packet
-        comms_set_packet_type(cradio, &m_msg, AMID_CRANECOMMUNICATION);
-        comms_am_set_destination(cradio, &m_msg, destination);
-        //comms_am_set_source(cradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
-        comms_set_payload_length(cradio, &m_msg, sizeof(craneLocationMsg));
+			// Send data packet
+		    comms_set_packet_type(cradio, &m_msg, AMID_CRANECOMMUNICATION);
+		    comms_am_set_destination(cradio, &m_msg, AM_BROADCAST_ADDR);
+		    //comms_am_set_source(cradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
+		    comms_set_payload_length(cradio, &m_msg, sizeof(crane_location_msg_t));
 
-        comms_error_t result = comms_send(cradio, &m_msg, radio_send_done, NULL);
-        logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
-        if (COMMS_SUCCESS == result)
-        {
-            m_sending = true;
-        }
+		    comms_error_t result = comms_send(cradio, &m_msg, radio_send_done, NULL);
+		    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
+		    if (COMMS_SUCCESS == result)
+		    {
+		        m_sending = true;
+		    }
+		}
+		osMutexRelease(snd_mutex);
 	}
-	osMutexRelease(snd_mutex);
 }
 
 /**********************************************************************************************
  *	Utility functions
  **********************************************************************************************/
 
-static uint8_t get_winning_cmd()
+static uint8_t getWinningCmd()
 {
-	//change crane state
 	uint8_t votes[MAX_SHIPS], i, rnd, mcount, max, wcmd;
 	bool atLeastOne = false;
 
 	for(i=0;i<6;i++)votes[i] = 0;
 
-	//find most popular command
+	// Find most popular command
 	while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
 	for(i=0;i<6;i++)
 	{
@@ -236,19 +302,19 @@ static uint8_t get_winning_cmd()
 	}
 	osMutexRelease(cmdb_mutex);
 
-	//if no commands from ships don't move
+	// If no commands from ships don't move
 	if(!atLeastOne)
 	{
 		return 0;
 	}
 
-	//get max
+	// Get max
 	max = votes[1];
 	for(i=2;i<6;i++)
 	{
 		if(votes[i]>max)max = votes[i];
 	}
-	//check if there are more than one max and mark these buffer locations, clear other locations
+	// Check if there are more than one max and mark these buffer locations, clear other locations
 	mcount = 0;
 	for(i=1;i<6;i++)
 	{
@@ -257,13 +323,13 @@ static uint8_t get_winning_cmd()
 	}
 	if(mcount>1)
 	{
-		//get random modulo mcount
+		// Get random modulo mcount
 		rnd = randomNumber(1, mcount);
 
 		for(i=1;i<6;i++)if(votes[i] == 1)
 		{
 			rnd--;
-			if(rnd == 0){wcmd = i;break;}//winning command
+			if(rnd == 0){wcmd = i;break;} // Winning command
 		}
 	}
 	else for(i=1;i<6;i++)if(votes[i] == 1){wcmd = i;break;}
@@ -273,29 +339,29 @@ static uint8_t get_winning_cmd()
 
 static uint8_t doCommand(uint8_t wcmd)
 {
-	cloc.cargoInCurrentLoc = false;
+	cloc.cargo_here = false;
 	switch(wcmd)
 	{
-		case CM_UP: if(cloc.craneY<GRID_UPPER_BOUND)cloc.craneY++;
+		case CM_UP: if(cloc.crane_y<GRID_UPPER_BOUND)cloc.crane_y++;
 		break;
-		case CM_DOWN: if(cloc.craneY>GRID_LOWER_BOUND)cloc.craneY--;
+		case CM_DOWN: if(cloc.crane_y>GRID_LOWER_BOUND)cloc.crane_y--;
 		break;
-		case CM_LEFT: if(cloc.craneX>GRID_LOWER_BOUND)cloc.craneX--;
+		case CM_LEFT: if(cloc.crane_x>GRID_LOWER_BOUND)cloc.crane_x--;
 		break;
-		case CM_RIGHT: if(cloc.craneX<GRID_UPPER_BOUND)cloc.craneX++;
+		case CM_RIGHT: if(cloc.crane_x<GRID_UPPER_BOUND)cloc.crane_x++;
 		break;
-		case CM_PLACE_CARGO: cloc.cargoInCurrentLoc = true;
+		case CM_PLACE_CARGO: cloc.cargo_here = true;
 		break;
-		default: return 1;//zero ends up here
+		default: return 1; // Zero ends up here
 		break;
 	}
-	if(cloc.cargoInCurrentLoc)info1("Cargo placed");
+	if(cloc.cargo_here)info1("Cargo placed");
 	return 0;
 }
 
-//random number between rndL and rndH (rndL <= rnd <=rndH)
-//only positive values
-//user must provide correct arguments, such that 0 <= rndL < rndH
+// Random number between rndL and rndH (rndL <= rnd <=rndH)
+// only positive values
+// user must provide correct arguments, such that 0 <= rndL < rndH
 
 static uint32_t randomNumber(uint32_t rndL, uint32_t rndH)
 {

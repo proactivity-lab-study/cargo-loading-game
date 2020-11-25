@@ -1,4 +1,26 @@
 /**
+ * 
+ * This is the main function of the ship-agent. The ship-agent
+ * composes a crane control module, a game state module and a
+ * ship strategy module.
+ * 
+ * The functionality of this main function is to
+ * 
+ * - initialise needed hardware functionality
+ * - initialise and start the RTOS kernel
+ * - retreive node signature - get node address and EUI64
+ * - initialise radio hardware and do radio setup
+ * - initialise the modules of the ship-agent (crane_control, 
+ *   game_status and ship_strategy)
+ * - print 'heartbeat' message to log every 60 seconds
+ * 
+ * Radio setup involves creating three message streams designated 
+ * by AMID_CRANECOMMUNICATION, AMID_SHIPCOMMUNICATION and 
+ * AMID_SYSTEMCOMMUNICATION identificators. This means that all 
+ * radio packets are filtered based on these IDs and each module 
+ * only receives messages intended for it.
+ * 
+ * TODO clean up logging
  * Copyright Thinnect Inc. 2019
  * Copyright to modifications Proactivity Lab 2020
  *
@@ -33,8 +55,8 @@
 #include "clg_comm.h"
 
 #include "loglevels.h"
-#define __MODUUL__ "main"
-#define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
+#define __MODUUL__ "smain"
+#define __LOG_LEVEL__ (LOG_LEVEL_ship_main & BASE_LOG_LEVEL)
 #include "log.h"
 
 // Include the information header binary
@@ -46,7 +68,7 @@ static void radio_start_done (comms_layer_t * comms, comms_status_t status, void
     debug("started %d", status);
 }
 
-// Perform basic radio setup, register to receive RadioCountToLeds packets
+// Perform basic radio setup
 static comms_layer_t* radio_setup (am_addr_t node_addr)
 {
     static comms_receiver_t rcvr, rcvr2, rcvr3;
@@ -92,12 +114,12 @@ void setup_loop (void * arg)
         warn1("ADDR:%"PRIX16, node_addr); // Falling back to default addr
     }
 
-    // initialize radio
+    // Initialize radio
     comms_layer_t* radio = radio_setup(node_addr);
     if (NULL == radio)
     {
         err1("radio");
-        for (;;); // panic
+        for (;;); // Panic
     }
 
 	init_crane_control(radio, node_addr);
@@ -108,7 +130,7 @@ void setup_loop (void * arg)
     for (;;)
     {
         osDelay(60*osKernelGetTickFreq()); // 60 secondss
-		info("HB"); //heartbeat
+		info("HB"); // Heartbeat
     }
 }
 

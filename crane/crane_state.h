@@ -9,15 +9,11 @@
 #ifndef CRANE_STATE_H_
 #define CRANE_STATE_H_
 
-#define GRID_LOWER_BOUND 2 //including
-#define GRID_UPPER_BOUND 30 //including
-
-
 /**********************************************************************************************
  *	Initialise module
  **********************************************************************************************/
 
-void init_crane(comms_layer_t* radio);
+void init_crane(comms_layer_t* radio, am_addr_t my_addr);
 void init_crane_loc();
 
 /**********************************************************************************************

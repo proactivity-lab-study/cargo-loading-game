@@ -1,8 +1,29 @@
 /**
- *
+ * 
+ * This is the main function of the crane-agent. The crane-agent
+ * composes the actual game engine and the crane itself.
+ * 
+ * The functionality of this main function is to
+ * 
+ * - initialise needed hardware functionality
+ * - initialise and start the RTOS kernel
+ * - retreive node signature - get node address and EUI64
+ * - initialise radio hardware and do radio setup
+ * - initialise the two modules of the crane-agent (system and 
+ *   crane)
+ * - print 'heartbeat' message to log every 60 seconds
+ * 
+ * Radio setup involves creating two message streams designated 
+ * by AMID_CRANECOMMUNICATION and AMID_SYSTEMCOMMUNICATION
+ * identificators. This means that all radio packets are filtered
+ * based on these IDs and crane module only receives crane
+ * messages and system module only receives system messages.
+ * 
+ * TODO clean up logging
+ * 
  * Copyright Thinnect Inc. 2019
  * Copyright to modifications Proactivity Lab 2020
- *
+ * 
  * @license MIT
  */
 #include <stdio.h>
@@ -29,15 +50,15 @@
 #include "endianness.h"
 
 #include "loglevels.h"
-#define __MODUUL__ "main"
-#define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
+#define __MODUUL__ "cmain"
+#define __LOG_LEVEL__ (LOG_LEVEL_crane_main & BASE_LOG_LEVEL)
 #include "log.h"
 
 // Include the information header binary
 #include "incbin.h"
 INCBIN(Header, "header.bin");
 
-#include "game_state.h"
+#include "system_state.h"
 #include "crane_state.h"
 #include "clg_comm.h"
 
@@ -69,11 +90,12 @@ static comms_layer_t* radio_setup (am_addr_t node_addr)
 
     comms_register_recv(radio, &rcvr, crane_receive_message, NULL, AMID_CRANECOMMUNICATION);
 	comms_register_recv(radio, &rcvr2, system_receive_message, NULL, AMID_SYSTEMCOMMUNICATION);
+
     debug1("radio rdy");
     return radio;
 }
 
-// Setup loop - init radio, crane and game, print heartbeat
+// Setup loop - init radio, crane and system, print heartbeat
 void setup_loop (void * arg)
 {
     am_addr_t node_addr = DEFAULT_AM_ADDR;
@@ -91,22 +113,22 @@ void setup_loop (void * arg)
         warn1("ADDR:%"PRIX16, node_addr); // Falling back to default addr
     }
 
-    // initialize radio
+    // Initialize radio
     comms_layer_t* radio = radio_setup(node_addr);
     if (NULL == radio)
     {
         err1("radio");
-        for (;;); // panic
+        for (;;); // Panic
     }
 
-	init_crane(radio);
-	init_system(radio);
+	init_crane(radio, node_addr);
+	init_system(radio, node_addr);
 
     // Loop forever
     for (;;)
     {
-        osDelay(60*osKernelGetTickFreq()); // 60 secondss
-		info("HB"); //heartbeat
+        osDelay(60*osKernelGetTickFreq()); // 60 seconds
+		info("HB"); // Heartbeat
     }
 }
 
@@ -146,12 +168,13 @@ int main ()
         log_init(BASE_LOG_LEVEL, &logger_fwrite, NULL);
 
         // Start the kernel
-        osKernelStart();
+        osKernelStart(); // This should never return
     }
     else
     {
         err1("!osKernelReady");
     }
 
+	// This is never reached
     for(;;);
 }
