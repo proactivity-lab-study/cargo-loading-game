@@ -17,8 +17,8 @@
 #include "game_types.h"
 
 #include "loglevels.h"
-#define __MODUUL__ "gamestatus"
-#define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
+#define __MODUUL__ "gstat"
+#define __LOG_LEVEL__ (LOG_LEVEL_game_status & BASE_LOG_LEVEL)
 #include "log.h"
 
 typedef struct ship_data_t{
@@ -172,6 +172,7 @@ void welcome_msg_loop(void *args)
 			osMutexRelease(sddb_mutex);
 			packet.messageID = WELCOME_MSG;
 			packet.senderAddr = my_address;
+			info1("Snd wlcme");
 			osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
 		}
 		else 
@@ -229,7 +230,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 				system_address = comms_am_get_source(comms, msg);
 				first_msg = false;
 			}
-			
+			info1("Rcv wlcme");
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 			add_ship(packet);
 			osMutexRelease(sddb_mutex);
@@ -245,6 +246,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			case SHIP_QRMSG :
 			packet = (query_response_msg_t *) comms_get_payload(comms, msg, sizeof(query_response_msg_t));
 			
+			info1("Rcv ship");
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 			add_ship(packet);
 			osMutexRelease(sddb_mutex);
@@ -255,7 +257,6 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			if(get_all_ships_data_in_progress && dest == my_address)osEventFlagsSet(evt_id, 0x00000001U);
 			osMutexRelease(asdb_mutex);
 
-			info1("command rcvd");
 			break;
 
 		case AS_QRMSG :

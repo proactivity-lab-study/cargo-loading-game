@@ -50,8 +50,8 @@
 #include "endianness.h"
 
 #include "loglevels.h"
-#define __MODUUL__ "main"
-#define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
+#define __MODUUL__ "cmain"
+#define __LOG_LEVEL__ (LOG_LEVEL_crane_main & BASE_LOG_LEVEL)
 #include "log.h"
 
 // Include the information header binary

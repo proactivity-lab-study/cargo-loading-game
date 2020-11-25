@@ -55,8 +55,8 @@
 #include "clg_comm.h"
 
 #include "loglevels.h"
-#define __MODUUL__ "main"
-#define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
+#define __MODUUL__ "smain"
+#define __LOG_LEVEL__ (LOG_LEVEL_ship_main & BASE_LOG_LEVEL)
 #include "log.h"
 
 // Include the information header binary

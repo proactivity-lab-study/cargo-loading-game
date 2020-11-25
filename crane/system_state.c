@@ -49,8 +49,8 @@
 #include "game_types.h"
 
 #include "loglevels.h"
-#define __MODUUL__ "game"
-#define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
+#define __MODUUL__ "csys"
+#define __LOG_LEVEL__ (LOG_LEVEL_system_state & BASE_LOG_LEVEL)
 #include "log.h"
 
 // Global cargo loading deadline expressed as Kernel tick count, i.e. game end time
@@ -138,6 +138,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 	if (comms_get_payload_length(comms, msg) == sizeof(query_msg_t))
 	{
 	    query_msg_t * packet = (query_msg_t*)comms_get_payload(comms, msg, sizeof(query_msg_t));
+		info1("Rcv qry");		
 		osStatus_t err = osMessageQueuePut(rcv_msg_qID, packet, 0, 0);
 		if(err == osOK)info1("rc query");
 		else warn1("msgq err");
@@ -163,11 +164,11 @@ static void incomingMsgHandler(void *arg)
 				ndx = registerNewShip(packet.senderAddr);
 				if(ndx >= MAX_SHIPS)
 				{
-					warn1("no room");
+					warn1("No room");
 				}
 				else 
 				{
-					info1("new ship: DATA_HERE");
+					info1("New ship %u", (uint8_t)packet.senderAddr);
 
 					rpacket.messageID = WELCOME_RMSG;
 					rpacket.senderAddr = ship_db[ndx].shipAddr; // Piggybacking destination address here
@@ -197,6 +198,7 @@ static void incomingMsgHandler(void *arg)
 
 			case SHIP_QMSG:
 
+				info1("Ship qry %u %u", (uint8_t)packet.senderAddr, (uint8_t)packet.shipAddr);
 				while(osMutexAcquire(sdb_mutex, 1000) != osOK);
 				ndx = getIndex(packet.shipAddr);
 				rpacket.messageID = SHIP_QRMSG;
@@ -213,6 +215,7 @@ static void incomingMsgHandler(void *arg)
 
 			case AS_QMSG:
 
+				info1("AShip qry %u", (uint8_t)packet.senderAddr);
 				bpacket.messageID = AS_QRMSG;
 				bpacket.senderAddr = SYSTEM_ADDR;
 				bpacket.shipAddr = packet.senderAddr;
@@ -332,7 +335,7 @@ static void sendResponseBuf(void *arg)
 		    comms_set_payload_length(sradio, &msg, sizeof(query_response_buf_t));
 
 		    comms_error_t result = comms_send(sradio, &msg, radioSendDone, NULL);
-		    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
+		    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "sndb %u", result);
 		    if (COMMS_SUCCESS == result)
 		    {
 		        m_sending = true;

@@ -25,8 +25,8 @@
 #include "game_types.h"
 
 #include "loglevels.h"
-#define __MODUUL__ "shipstrategy"
-#define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
+#define __MODUUL__ "sstrt"
+#define __LOG_LEVEL__ (LOG_LEVEL_ship_strategy & BASE_LOG_LEVEL)
 #include "log.h"
 
 static osMutexId_t snd_mutex;
@@ -79,8 +79,7 @@ void ship2ship_receive_message(comms_layer_t* comms, const comms_msg_t* msg, voi
 	uint8_t pl_len = comms_get_payload_length(comms, msg);
 	uint8_t * rmsg = (uint8_t *) comms_get_payload(comms, msg, pl_len);
 	
-	info1("command rcvd");
-	debug1("rcv-c");
+	info1("rcvd");
 }
 
 /**********************************************************************************************

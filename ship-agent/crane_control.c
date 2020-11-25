@@ -18,8 +18,8 @@
 #include "game_types.h"
 
 #include "loglevels.h"
-#define __MODUUL__ "crane"
-#define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
+#define __MODUUL__ "ccntr"
+#define __LOG_LEVEL__ (LOG_LEVEL_crane_control & BASE_LOG_LEVEL)
 #include "log.h"
 
 typedef struct scmd_t
@@ -127,6 +127,7 @@ static void craneMainLoop(void *args)
 				packet.messageID = CRANE_COMMAND_MSG;
 				packet.senderAddr = my_address;
 				packet.cmd = cmd;
+				info1("Cmnd sel %u", cmd);
 				osMessageQueuePut(smsg_qID, &packet, 0, 0);
 			}
 		}
@@ -181,6 +182,7 @@ static void locationMsgHandler(void *args)
 		if(packet.messageID == CRANE_LOCATION_MSG && packet.senderAddr == CRANE_ADDR)
 		{
 			lastCraneEventTime = osKernelGetTickCount();
+			info1("Crane mov %lu %lu %u", packet.x_coordinate, packet.y_coordinate, packet.cargoPlaced);
 
 			while(osMutexAcquire(cloc_mutex, 1000) != osOK);
 			cloc.crane_x = packet.x_coordinate;

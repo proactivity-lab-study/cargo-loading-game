@@ -66,7 +66,7 @@
 
 #include "loglevels.h"
 #define __MODUUL__ "crane"
-#define __LOG_LEVEL__ (LOG_LEVEL_main & BASE_LOG_LEVEL)
+#define __LOG_LEVEL__ (LOG_LEVEL_crane_state & BASE_LOG_LEVEL)
 #include "log.h"
 
 static uint8_t cmd_buf[MAX_SHIPS]; // Buffer to store received commands
@@ -140,7 +140,7 @@ void init_crane_loc()
 static void craneMainLoop(void *args)
 {
 	uint8_t wcmd;
-	crane_location_msg_t sloc;
+	static crane_location_msg_t sloc;
 	const uint32_t delay_ticks = (uint32_t)CRANE_UPDATE_INTERVAL * osKernelGetTickFreq();
 	for(;;)
 	{
@@ -157,9 +157,9 @@ static void craneMainLoop(void *args)
 				sloc.y_coordinate = cloc.crane_y;
 				sloc.cargoPlaced = cloc.cargo_here;
 				osMessageQueuePut(smsg_qID, &sloc, 0, 0);
-				info1("new location x y");
 			}
 			osMutexRelease(cloc_mutex);
+			info1("New loc %u %u %u", sloc.x_coordinate, sloc.y_coordinate, sloc.cargoPlaced);
 		}
 	}
 }
@@ -173,7 +173,7 @@ void crane_receive_message (comms_layer_t* comms, const comms_msg_t* msg, void* 
 	if (comms_get_payload_length(comms, msg) >= sizeof(crane_command_msg_t))
     {
         crane_command_msg_t * packet = (crane_command_msg_t*)comms_get_payload(comms, msg, sizeof(crane_command_msg_t));
-        debug1("rcv");
+        info1("Rcv cmnd");
         osStatus_t err = osMessageQueuePut(rmsg_qID, packet, 0, 0);
 		if(err == osOK)info1("rc query");
 		else warn1("msgq err");
@@ -192,6 +192,7 @@ static void incomingMsgHandler(void *args)
 		osMessageQueueGet(rmsg_qID, &packet, NULL, osWaitForever);
 		if(packet.messageID == CRANE_COMMAND_MSG)
 		{
+			info("Rcvd %u %u", packet.senderAddr, packet.cmd);
 			cmd = packet.cmd;
 			if(cmd == CM_CURRENT_LOCATION)
 			{
