@@ -425,7 +425,7 @@ uint8_t get_all_ship_addr(am_addr_t ship_addr[])
 	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 	for(i=0;i<MAX_SHIPS;i++)
 	{
-		if(ships[i].shipInGame)ship_addr[k++] = ships[i].shipAdd;
+		if(ships[i].ship_in_game)ship_addr[k++] = ships[i].ship_addr;
 	}
 	osMutexRelease(sddb_mutex);
 	return k;

@@ -161,7 +161,7 @@ am_addr_t get_nearest_n()
 
 	loc_bundle_t sloc, my_loc;
 
-	num_ships = get_all_ship_addr(ship_addresses);
+	num_ships = get_all_ships_addr(ship_addresses, MAX_SHIPS);
 	
 	saddr = my_address;
 
