@@ -36,11 +36,11 @@ static crane_location_t cloc;
 bool Xfirst = true; // Which coordinate to use first, x is default
 bool alwaysPlaceCargo = true; // Always send 'place cargo' command when crane is on top of a ship
 
-static osMutexId_t cmdb_mutex, cloc_mutex, snd_mutex;
+static osMutexId_t cmdb_mutex, cloc_mutex;
 static osMessageQueueId_t cmsg_qID, lmsg_qID, smsg_qID;
+static osThreadId_t snd_task_id;
 
 static comms_msg_t m_msg;
-static bool m_sending = false;
 static comms_layer_t* cradio;
 static am_addr_t my_address;
 static am_addr_t crane_address = AM_BROADCAST_ADDR; // Use actual crane address if possible
@@ -70,7 +70,6 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 
 	cmdb_mutex = osMutexNew(NULL);				// Protects ships' crane command database
 	cloc_mutex = osMutexNew(&cloc_Mutex_attr);	// Protects current crane location values
-	snd_mutex = osMutexNew(NULL);	// Protects against sending another message before hardware has handled previous message
 	
 	smsg_qID = osMessageQueueNew(9, sizeof(crane_command_msg_t), NULL); // Send queue
 	cmsg_qID = osMessageQueueNew(9, sizeof(crane_command_msg_t), NULL); // Receive queue
@@ -91,7 +90,7 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 
     osThreadNew(commandMsgHandler, NULL, NULL);		// Handles received crane command messages
     osThreadNew(locationMsgHandler, NULL, NULL);	// Handles received crane command messages
-    osThreadNew(sendCommandMsg, NULL, NULL);		// Handles command message sending
+    snd_task_id = osThreadNew(sendCommandMsg, NULL, NULL);		// Handles command message sending
 	osThreadNew(craneMainLoop, NULL, NULL);			// Crane state changes
 }
 
@@ -246,9 +245,7 @@ static void commandMsgHandler(void *args)
 static void radio_send_done(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
     logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
-    while(osMutexAcquire(snd_mutex, 1000) != osOK);
-    m_sending = false;
-    osMutexRelease(snd_mutex);
+    osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
 static void sendCommandMsg(void *args)
@@ -258,35 +255,28 @@ static void sendCommandMsg(void *args)
 	for(;;)
 	{
 		osMessageQueueGet(smsg_qID, (crane_command_msg_t*) &packet, NULL, osWaitForever);
-		while(osMutexAcquire(snd_mutex, 1000) != osOK);
-		if(!m_sending)
+		
+		osThreadFlagsWait(0x00000001U, osFlagsWaitAny, osWaitForever); // Flags are automatically cleared
+
+		comms_init_message(cradio, &m_msg);
+		crane_command_msg_t * cMsg = comms_get_payload(cradio, &m_msg, sizeof(crane_command_msg_t));
+		if (cMsg == NULL)
 		{
-			comms_init_message(cradio, &m_msg);
-			crane_command_msg_t * cMsg = comms_get_payload(cradio, &m_msg, sizeof(crane_command_msg_t));
-			if (cMsg == NULL)
-			{
-				osMutexRelease(snd_mutex);
-				continue ;// Continue for(;;) loop
-			}
-
-			cMsg->messageID = packet.messageID;
-			cMsg->senderAddr = packet.senderAddr;
-			cMsg->cmd = packet.cmd;
-				
-			// Send data packet
-		    comms_set_packet_type(cradio, &m_msg, AMID_CRANECOMMUNICATION);
-		    comms_am_set_destination(cradio, &m_msg, crane_address);
-		    //comms_am_set_source(cradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
-		    comms_set_payload_length(cradio, &m_msg, sizeof(crane_command_msg_t));
-
-		    comms_error_t result = comms_send(cradio, &m_msg, radio_send_done, NULL);
-		    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
-		    if (COMMS_SUCCESS == result)
-		    {
-		        m_sending = true;
-		    }
+			continue ;// Continue for(;;) loop
 		}
-		osMutexRelease(snd_mutex);
+
+		cMsg->messageID = packet.messageID;
+		cMsg->senderAddr = packet.senderAddr;
+		cMsg->cmd = packet.cmd;
+			
+		// Send data packet
+	    comms_set_packet_type(cradio, &m_msg, AMID_CRANECOMMUNICATION);
+	    comms_am_set_destination(cradio, &m_msg, crane_address);
+	    //comms_am_set_source(cradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
+	    comms_set_payload_length(cradio, &m_msg, sizeof(crane_command_msg_t));
+
+	    comms_error_t result = comms_send(cradio, &m_msg, radio_send_done, NULL);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
 	}
 }
 
