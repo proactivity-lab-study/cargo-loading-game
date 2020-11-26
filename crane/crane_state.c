@@ -58,6 +58,7 @@
 
 #include "mist_comm_am.h"
 #include "radio.h"
+#include "endianness.h"
 
 #include "system_state.h"
 #include "crane_state.h"
@@ -192,13 +193,13 @@ static void incomingMsgHandler(void *args)
 		osMessageQueueGet(rmsg_qID, &packet, NULL, osWaitForever);
 		if(packet.messageID == CRANE_COMMAND_MSG)
 		{
-			info("Rcvd %u %u", packet.senderAddr, packet.cmd);
+			info("Rcvd %u %u", ntoh16(packet.senderAddr), packet.cmd);
 			cmd = packet.cmd;
 			if(cmd == CM_CURRENT_LOCATION)
 			{
 				while(osMutexAcquire(cloc_mutex, 1000) != osOK);
 				sloc.messageID = CRANE_LOCATION_MSG;
-				sloc.senderAddr = my_address;
+				sloc.senderAddr = CRANE_ADDR;
 				sloc.x_coordinate = cloc.crane_x;
 				sloc.y_coordinate = cloc.crane_y;
 				sloc.cargoPlaced = cloc.cargo_here;
@@ -210,7 +211,7 @@ static void incomingMsgHandler(void *args)
 				// Each ship has a designated memory area in the buffer
 				// because if a ship sends multiple commands during a
 				// crane update interval, only the last must be used.
-				index = getIndex(packet.senderAddr);
+				index = getIndex(ntoh16(packet.senderAddr));
 				if(index < MAX_SHIPS)
 				{
 					while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
@@ -242,7 +243,7 @@ static void sendLocationMsg(void *args)
 
 	for(;;)
 	{
-		osMessageQueueGet(smsg_qID, (crane_location_msg_t*) &packet, NULL, osWaitForever);
+		osMessageQueueGet(smsg_qID, &packet, NULL, osWaitForever);
 
 		osThreadFlagsWait(0x00000001U, osFlagsWaitAny, osWaitForever); // Flags are automatically cleared
 
@@ -254,7 +255,7 @@ static void sendLocationMsg(void *args)
 		}
 
 		cLMsg->messageID = CRANE_LOCATION_MSG;
-		cLMsg->senderAddr = CRANE_ADDR;
+		cLMsg->senderAddr = hton16((uint16_t)CRANE_ADDR);
 		cLMsg->x_coordinate = packet.x_coordinate;
 		cLMsg->y_coordinate = packet.y_coordinate;
 		cLMsg->cargoPlaced = packet.cargoPlaced;

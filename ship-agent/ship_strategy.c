@@ -19,6 +19,7 @@
 
 #include "mist_comm_am.h"
 #include "radio.h"
+#include "endianness.h"
 
 #include "ship_strategy.h"
 #include "clg_comm.h"
@@ -107,8 +108,8 @@ static void send_msg(void *args)
 			continue ;// Continue for(;;) loop
 		}
 		qmsg->messageID = packet.messageID;
-		qmsg->messageID = packet.senderAddr;
-		qmsg->messageID = packet.shipAddr;
+		qmsg->senderAddr = hton16(packet.senderAddr);
+		qmsg->shipAddr = hton16(packet.shipAddr);
 
 		// Send data packet
 	    comms_set_packet_type(sradio, &m_msg, AMID_SYSTEMCOMMUNICATION);

@@ -11,6 +11,7 @@
 
 #include "mist_comm_am.h"
 #include "radio.h"
+#include "endianness.h"
 
 #include "crane_control.h"
 #include "game_status.h"
@@ -158,7 +159,7 @@ void crane_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* u
 		crane_location_msg_t * packet = (crane_location_msg_t*)comms_get_payload(comms, msg, sizeof(crane_location_msg_t));
         debug1("rcv-l");
 
-		if(packet->messageID == CRANE_LOCATION_MSG && packet->senderAddr == CRANE_ADDR && first_msg)
+		if(packet->messageID == CRANE_LOCATION_MSG && ntoh16(packet->senderAddr) == CRANE_ADDR && first_msg)
 		{
 			crane_address = crane_addr;
 			first_msg = false;
@@ -179,7 +180,7 @@ static void locationMsgHandler(void *args)
 	for(;;)
 	{
 		osMessageQueueGet(lmsg_qID, &packet, NULL, osWaitForever);
-		if(packet.messageID == CRANE_LOCATION_MSG && packet.senderAddr == CRANE_ADDR)
+		if(packet.messageID == CRANE_LOCATION_MSG && ntoh16(packet.senderAddr) == CRANE_ADDR)
 		{
 			lastCraneEventTime = osKernelGetTickCount();
 			info1("Crane mov %lu %lu %u", packet.x_coordinate, packet.y_coordinate, packet.cargoPlaced);
@@ -218,7 +219,7 @@ static void commandMsgHandler(void *args)
 			while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
 			for(i=0;i<MAX_SHIPS;i++)
 			{
-				if(cmds[i].ship_addr == packet.senderAddr)
+				if(cmds[i].ship_addr == ntoh16(packet.senderAddr))
 				{
 					cmds[i].ship_cmd = packet.cmd;
 					break;
@@ -229,7 +230,7 @@ static void commandMsgHandler(void *args)
 				i = get_empty_slot();
 				if(i<MAX_SHIPS)
 				{
-					cmds[i].ship_addr = packet.senderAddr;
+					cmds[i].ship_addr = ntoh16(packet.senderAddr);
 					cmds[i].ship_cmd = packet.cmd;
 				}
 				else ; // Drop this ships command, cuz no room
@@ -255,7 +256,7 @@ static void sendCommandMsg(void *args)
 
 	for(;;)
 	{
-		osMessageQueueGet(smsg_qID, (crane_command_msg_t*) &packet, NULL, osWaitForever);
+		osMessageQueueGet(smsg_qID, &packet, NULL, osWaitForever);
 		
 		osThreadFlagsWait(0x00000001U, osFlagsWaitAny, osWaitForever); // Flags are automatically cleared
 
@@ -267,7 +268,7 @@ static void sendCommandMsg(void *args)
 		}
 
 		cMsg->messageID = packet.messageID;
-		cMsg->senderAddr = packet.senderAddr;
+		cMsg->senderAddr = hton16(packet.senderAddr);
 		cMsg->cmd = packet.cmd;
 			
 		// Send data packet

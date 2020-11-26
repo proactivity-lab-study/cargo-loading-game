@@ -161,16 +161,15 @@ static void incomingMsgHandler(void *arg)
 		switch(packet.messageID)
 		{
 			case WELCOME_MSG:
-
 				while(osMutexAcquire(sdb_mutex, 1000) != osOK);
-				ndx = registerNewShip(packet.senderAddr);
+				ndx = registerNewShip(ntoh16(packet.senderAddr));
 				if(ndx >= MAX_SHIPS)
 				{
-					warn1("No room");
+					info1("No room");
 				}
 				else 
 				{
-					info1("New ship %u", (uint8_t)packet.senderAddr);
+					info1("New ship %lu", ntoh16(packet.senderAddr));
 
 					rpacket.messageID = WELCOME_RMSG;
 					rpacket.senderAddr = ship_db[ndx].shipAddr; // Piggybacking destination address here
@@ -186,10 +185,9 @@ static void incomingMsgHandler(void *arg)
 			break;
 
 			case GTIME_QMSG:
-
 				rpacket.messageID = GTIME_QRMSG;
-				rpacket.senderAddr = packet.senderAddr; // Piggybacking destination address here
-				rpacket.shipAddr = packet.senderAddr;
+				rpacket.senderAddr = ntoh16(packet.senderAddr); // Piggybacking destination address here
+				rpacket.shipAddr = ntoh16(packet.senderAddr);
 				rpacket.loadingDeadline = (uint16_t)((global_load_deadline - osKernelGetTickCount()) / osKernelGetTickFreq());
 				rpacket.x_coordinate = DEFAULT_LOC;
 				rpacket.y_coordinate = DEFAULT_LOC;
@@ -199,12 +197,11 @@ static void incomingMsgHandler(void *arg)
 			break;
 
 			case SHIP_QMSG:
-
-				info1("Ship qry %u %u", (uint8_t)packet.senderAddr, (uint8_t)packet.shipAddr);
+				info1("Ship qry %lu %lu", ntoh16(packet.senderAddr), ntoh16(packet.shipAddr));
 				while(osMutexAcquire(sdb_mutex, 1000) != osOK);
-				ndx = getIndex(packet.shipAddr);
+				ndx = getIndex(ntoh16(packet.senderAddr));
 				rpacket.messageID = SHIP_QRMSG;
-				rpacket.senderAddr = packet.senderAddr; // Piggybacking destination address here
+				rpacket.senderAddr = ntoh16(packet.senderAddr); // Piggybacking destination address here
 				rpacket.shipAddr = ship_db[ndx].shipAddr;
 				rpacket.loadingDeadline = (uint16_t)((ship_db[ndx].ltime - osKernelGetTickCount()) / osKernelGetTickFreq());
 				rpacket.x_coordinate = ship_db[ndx].x_coordinate;
@@ -216,11 +213,10 @@ static void incomingMsgHandler(void *arg)
 			break;
 
 			case AS_QMSG:
-
-				info1("AShip qry %u", (uint8_t)packet.senderAddr);
+				info1("AShip qry %lu", ntoh16(packet.senderAddr));
 				bpacket.messageID = AS_QRMSG;
 				bpacket.senderAddr = SYSTEM_ADDR;
-				bpacket.shipAddr = packet.senderAddr;
+				bpacket.shipAddr = ntoh16(packet.senderAddr);
 				while(osMutexAcquire(sdb_mutex, 1000) != osOK);
 				bpacket.len = getAllShips(bpacket.ships, MAX_SHIPS);
 				osMutexRelease(sdb_mutex);			
@@ -230,10 +226,9 @@ static void incomingMsgHandler(void *arg)
 			break;
 
 			case ACARGO_QMSG:
-
 				bpacket.messageID = ACARGO_QRMSG;
 				bpacket.senderAddr = SYSTEM_ADDR;
-				bpacket.shipAddr = packet.senderAddr;
+				bpacket.shipAddr = ntoh16(packet.senderAddr);
 				while(osMutexAcquire(sdb_mutex, 1000) != osOK);
 				bpacket.len = getAllCargo(bpacket.ships, MAX_SHIPS);
 				osMutexRelease(sdb_mutex);
@@ -242,7 +237,8 @@ static void incomingMsgHandler(void *arg)
 
 			break;
 
-			default: break; // Do nothing, except drop this quiery
+			default: 
+			break; // Do nothing, except drop this quiery
 		}
 	}
 }
@@ -263,7 +259,7 @@ static void sendResponseMsg(void *arg)
 
 	for(;;)
 	{
-		osMessageQueueGet(snd_msg_qID, (query_response_msg_t*) &packet, NULL, osWaitForever);
+		osMessageQueueGet(snd_msg_qID, &packet, NULL, osWaitForever);
 
 		osEventFlagsWait(snd_event_id, 0x00000001U, osFlagsWaitAny, osWaitForever); // Flags automatically cleared
 
@@ -275,8 +271,8 @@ static void sendResponseMsg(void *arg)
 		}
 		dest = packet.senderAddr;
 		qRMsg->messageID = packet.messageID;
-		qRMsg->senderAddr = SYSTEM_ADDR;
-		qRMsg->shipAddr = packet.shipAddr;
+		qRMsg->senderAddr = hton16((uint16_t)SYSTEM_ADDR);
+		qRMsg->shipAddr = hton16(packet.shipAddr);
 		qRMsg->loadingDeadline = hton16(packet.loadingDeadline); // hton16() ensures correct endianness
 		qRMsg->x_coordinate = packet.x_coordinate;
 		qRMsg->y_coordinate = packet.y_coordinate;
@@ -311,12 +307,12 @@ static void sendResponseBuf(void *arg)
 		}
 
 		qRMsg->messageID = packet.messageID;
-		qRMsg->senderAddr = packet.senderAddr;
-		qRMsg->shipAddr = packet.shipAddr;
+		qRMsg->senderAddr = hton16(packet.senderAddr);
+		qRMsg->shipAddr = hton16(packet.shipAddr);
 		qRMsg->len = packet.len;
 		for(i=0;i<packet.len;i++)
 		{
-			qRMsg->ships[i]=packet.ships[i];
+			qRMsg->ships[i]=hton16(packet.ships[i]);
 		}
 
 		// Send data packet
@@ -355,7 +351,6 @@ static uint8_t registerNewShip(am_addr_t shipAddr)
 		ship_db[index].shipAddr = shipAddr;
 		ship_db[index].shipInGame = true;
 	}
-
 	return index;
 }
 

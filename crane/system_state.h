@@ -11,7 +11,7 @@
 // Ship database
 typedef struct sdb_t {
 	bool shipInGame;
-	uint8_t shipAddr;
+	am_addr_t shipAddr;
 	uint8_t x_coordinate;
 	uint8_t y_coordinate;
 	uint32_t ltime;	// Cargo loading deadline expressed as Kernel tick count
