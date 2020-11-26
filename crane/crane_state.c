@@ -86,7 +86,7 @@ static void craneMainLoop(void *args);
 static void sendLocationMsg(void *args);
 
 static uint8_t getWinningCmd();
-static uint8_t doCommand(uint8_t wcmd);
+static void doCommand(uint8_t wcmd);
 static uint32_t randomNumber(uint32_t rndL, uint32_t rndH);
 
 /**********************************************************************************************
@@ -147,21 +147,20 @@ static void craneMainLoop(void *args)
 	{
 		osDelay(delay_ticks);
 		wcmd = getWinningCmd();
-		if(wcmd > 0)
-		{
-			while(osMutexAcquire(cloc_mutex, 1000) != osOK);
-			if(!doCommand(wcmd))
-			{
-				sloc.messageID = CRANE_LOCATION_MSG;
-				sloc.senderAddr = my_address;
-				sloc.x_coordinate = cloc.crane_x;
-				sloc.y_coordinate = cloc.crane_y;
-				sloc.cargoPlaced = cloc.cargo_here;
-				osMessageQueuePut(smsg_qID, &sloc, 0, 0);
-			}
-			osMutexRelease(cloc_mutex);
-			info1("New loc %u %u %u", sloc.x_coordinate, sloc.y_coordinate, sloc.cargoPlaced);
-		}
+
+		while(osMutexAcquire(cloc_mutex, 1000) != osOK);
+		
+		doCommand(wcmd);
+		sloc.messageID = CRANE_LOCATION_MSG;
+		sloc.senderAddr = my_address;
+		sloc.x_coordinate = cloc.crane_x;
+		sloc.y_coordinate = cloc.crane_y;
+		sloc.cargoPlaced = cloc.cargo_here;
+		osMessageQueuePut(smsg_qID, &sloc, 0, 0);
+		
+		osMutexRelease(cloc_mutex);
+		
+		info1("Location %u %u %u", sloc.x_coordinate, sloc.y_coordinate, sloc.cargoPlaced);
 	}
 }
 
@@ -329,7 +328,7 @@ static uint8_t getWinningCmd()
 	return wcmd;
 }
 
-static uint8_t doCommand(uint8_t wcmd)
+static void doCommand(uint8_t wcmd)
 {
 	cloc.cargo_here = false;
 	switch(wcmd)
@@ -342,13 +341,13 @@ static uint8_t doCommand(uint8_t wcmd)
 		break;
 		case CM_RIGHT: if(cloc.crane_x<GRID_UPPER_BOUND)cloc.crane_x++;
 		break;
-		case CM_PLACE_CARGO: cloc.cargo_here = true;
+		case CM_PLACE_CARGO: 
+			cloc.cargo_here = true;
+			info1("Cargo placed");
 		break;
-		default: return 1; // Zero ends up here
+		default: cloc.cargo_here = true; //Incorrect command, restore cargo status
 		break;
 	}
-	if(cloc.cargo_here)info1("Cargo placed");
-	return 0;
 }
 
 // Random number between rndL and rndH (rndL <= rnd <=rndH)
