@@ -115,7 +115,8 @@ void init_system(comms_layer_t* radio, am_addr_t my_addr)
 	snd_msg_qID = osMessageQueueNew(9, sizeof(query_response_msg_t), NULL);	// For response messages
 	snd_buf_qID = osMessageQueueNew(9, sizeof(query_response_buf_t), NULL);	// For response messages
 
-	snd_event_id = osEventFlagsNew(NULL);
+	snd_event_id = osEventFlagsNew(NULL); // Using one event flag for two send threads. Possible starvation??
+	osEventFlagsSet(snd_event_id, 0x00000001);
 
 	osThreadNew(incomingMsgHandler, NULL, NULL);	// Handles incoming messages and responses to
 	osThreadNew(sendResponseMsg, NULL, NULL);	// Sends query_response_msg_t response messages
@@ -251,7 +252,7 @@ static void incomingMsgHandler(void *arg)
  **********************************************************************************************/
 static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-st %u", result);
 	osEventFlagsSet(snd_event_id, 0x00000001U);
 }
 
@@ -288,7 +289,7 @@ static void sendResponseMsg(void *arg)
 	    comms_set_payload_length(sradio, &msg, sizeof(query_response_msg_t));
 
 	    comms_error_t result = comms_send(sradio, &msg, radioSendDone, NULL);
-	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd-stm %u", result);
 	}
 }
 
@@ -325,7 +326,7 @@ static void sendResponseBuf(void *arg)
 	    comms_set_payload_length(sradio, &msg, sizeof(query_response_buf_t));
 
 	    comms_error_t result = comms_send(sradio, &msg, radioSendDone, NULL);
-	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "sndb %u", result);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd-stb %u", result);
 	}
 }
 

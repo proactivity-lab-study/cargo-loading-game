@@ -110,6 +110,7 @@ void init_system_status(comms_layer_t* radio, am_addr_t addr)
 
 	wmsg_thread = osThreadNew(welcome_msg_loop, NULL, NULL); // Sends welcome message and then stops
 	snd_task_id = osThreadNew(send_msg_loop, NULL, NULL); // Sends quiery messages
+	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets sending in a ready-to-send state
 	osThreadNew(get_all_ships_data, NULL, NULL);
 	osThreadNew(get_all_ships_in_game, NULL, NULL); // Sends AS_QMSG message	
 }
@@ -297,7 +298,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 
 static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-gs %u", result);
 	osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
@@ -327,7 +328,7 @@ static void send_msg_loop(void *args)
 	    comms_set_payload_length(sradio, &m_msg, sizeof(query_msg_t));
 
 	    comms_error_t result = comms_send(sradio, &m_msg, radio_send_done, NULL);
-	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd-gs %u", result);
 	}
 }
 

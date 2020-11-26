@@ -61,6 +61,7 @@ void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 
 	osThreadNew(start_coop, NULL, NULL); // Initiates cooperation message send
 	snd_task_id = osThreadNew(send_msg, NULL, NULL); // Sends messages
+	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets sending in a ready-to-send state
 }
 
 /**********************************************************************************************
@@ -148,7 +149,7 @@ void ship2ship_receive_message(comms_layer_t* comms, const comms_msg_t* msg, voi
 
 static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-ss %u", result);
     osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
@@ -214,7 +215,7 @@ static void send_msg(void *args)
 	    comms_set_payload_length(sradio, &m_msg, len);
 
 	    comms_error_t result = comms_send(sradio, &m_msg, radio_send_done, NULL);
-	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd-ss %u", result);
 	}
 }
 

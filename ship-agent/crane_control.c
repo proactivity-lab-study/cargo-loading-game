@@ -29,7 +29,7 @@ typedef struct scmd_t
 }scmd_t;
 
 static scmd_t cmds[MAX_SHIPS];
-uint32_t lastCraneEventTime = 0; // Kernel ticks
+static uint32_t lastCraneEventTime = 0xefffffff; // Event initial value; kernel ticks
 static crane_location_t cloc;
 
 // Some initial tactics choices
@@ -89,8 +89,9 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 	osMutexRelease(cloc_mutex);
 
     osThreadNew(commandMsgHandler, NULL, NULL);		// Handles received crane command messages
-    osThreadNew(locationMsgHandler, NULL, NULL);	// Handles received crane command messages
+    osThreadNew(locationMsgHandler, NULL, NULL);	// Handles received crane location messages
     snd_task_id = osThreadNew(sendCommandMsg, NULL, NULL);		// Handles command message sending
+	osThreadFlagsSet(snd_task_id, 0x00000001U); 	// Sets sending in a ready-to-send state
 	osThreadNew(craneMainLoop, NULL, NULL);			// Crane state changes
 }
 
@@ -113,6 +114,7 @@ static void craneMainLoop(void *args)
 		//TODO User code here: evaluate situation and choose tactics
 
 		time_left = CRANE_UPDATE_INTERVAL * osKernelGetTickFreq() + lastCraneEventTime - osKernelGetTickCount();
+		info1("time %lu", time_left);
 		if(time_left < ticks)
 		{
 			Xfirst = false;	// This is a tactical choice and ship strategy module may want to change it
@@ -244,7 +246,7 @@ static void commandMsgHandler(void *args)
 
 static void radio_send_done(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-cc %u", result);
     osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
@@ -276,7 +278,7 @@ static void sendCommandMsg(void *args)
 	    comms_set_payload_length(cradio, &m_msg, sizeof(crane_command_msg_t));
 
 	    comms_error_t result = comms_send(cradio, &m_msg, radio_send_done, NULL);
-	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd-cc %u", result);
 	}
 }
 

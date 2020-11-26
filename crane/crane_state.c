@@ -120,6 +120,7 @@ void init_crane(comms_layer_t* radio, am_addr_t my_addr)
     osThreadNew(incomingMsgHandler, NULL, NULL);	// Handles received messages 
 	osThreadNew(craneMainLoop, NULL, NULL);		// Crane state changes
 	snd_task_id = osThreadNew(sendLocationMsg, NULL, NULL);	// Sends crane location info
+	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets sending in a ready-to-send state
 }
 
 void init_crane_loc()
@@ -231,7 +232,7 @@ static void incomingMsgHandler(void *args)
 
 static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-cs %u", result);
 	osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
@@ -265,7 +266,7 @@ static void sendLocationMsg(void *args)
 	    comms_set_payload_length(cradio, &m_msg, sizeof(crane_location_msg_t));
 
 	    comms_error_t result = comms_send(cradio, &m_msg, radio_send_done, NULL);
-	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd-cs %u", result);
 	}
 }
 
