@@ -52,6 +52,7 @@ void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 
 	osThreadNew(not_much, NULL, NULL); // Empty thread
 	snd_task_id = osThreadNew(send_msg, NULL, NULL); // Sends messages
+	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to read-to-send state
 }
 
 /**********************************************************************************************

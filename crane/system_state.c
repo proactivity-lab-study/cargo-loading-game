@@ -116,6 +116,7 @@ void init_system(comms_layer_t* radio, am_addr_t my_addr)
 	snd_buf_qID = osMessageQueueNew(9, sizeof(query_response_buf_t), NULL);	// For response messages
 
 	snd_event_id = osEventFlagsNew(NULL);
+	osEventFlagsSet(snd_event_id, 0x00000001U); // Sets send threads to read-to-send state
 
 	osThreadNew(incomingMsgHandler, NULL, NULL);	// Handles incoming messages and responses to
 	osThreadNew(sendResponseMsg, NULL, NULL);	// Sends query_response_msg_t response messages

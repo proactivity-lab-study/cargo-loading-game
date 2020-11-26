@@ -29,7 +29,7 @@ typedef struct scmd_t
 }scmd_t;
 
 static scmd_t cmds[MAX_SHIPS];
-uint32_t lastCraneEventTime = 0; // Kernel ticks
+uint32_t lastCraneEventTime = 0x0FFFFFFFU; // Event initial value; kernel ticks
 static crane_location_t cloc;
 
 // Some initial tactics choices
@@ -89,8 +89,9 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 	osMutexRelease(cloc_mutex);
 
     osThreadNew(commandMsgHandler, NULL, NULL);		// Handles received crane command messages
-    osThreadNew(locationMsgHandler, NULL, NULL);	// Handles received crane command messages
+    osThreadNew(locationMsgHandler, NULL, NULL);	// Handles received crane location messages
     snd_task_id = osThreadNew(sendCommandMsg, NULL, NULL);		// Handles command message sending
+	osThreadFlagsSet(snd_task_id, 0x00000001U); 	// Sets thread to read-to-send state
 	osThreadNew(craneMainLoop, NULL, NULL);			// Crane state changes
 }
 

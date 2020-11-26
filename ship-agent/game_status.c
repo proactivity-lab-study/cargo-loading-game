@@ -110,6 +110,7 @@ void init_system_status(comms_layer_t* radio, am_addr_t addr)
 
 	wmsg_thread = osThreadNew(welcome_msg_loop, NULL, NULL); // Sends welcome message and then stops
 	snd_task_id = osThreadNew(send_msg_loop, NULL, NULL); // Sends quiery messages
+	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to read-to-send state
 	osThreadNew(get_all_ships_data, NULL, NULL);
 	osThreadNew(get_all_ships_in_game, NULL, NULL); // Sends AS_QMSG message	
 }
