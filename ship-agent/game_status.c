@@ -11,6 +11,7 @@
 
 #include "mist_comm_am.h"
 #include "radio.h"
+#include "endianness.h"
 
 #include "game_status.h"
 #include "clg_comm.h"
@@ -110,7 +111,7 @@ void init_system_status(comms_layer_t* radio, am_addr_t addr)
 
 	wmsg_thread = osThreadNew(welcome_msg_loop, NULL, NULL); // Sends welcome message and then stops
 	snd_task_id = osThreadNew(send_msg_loop, NULL, NULL); // Sends quiery messages
-	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets sending in a ready-to-send state
+	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
 	osThreadNew(get_all_ships_data, NULL, NULL);
 	osThreadNew(get_all_ships_in_game, NULL, NULL); // Sends AS_QMSG message	
 }
@@ -218,7 +219,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 		case GTIME_QRMSG :
 			packet = (query_response_msg_t *) comms_get_payload(comms, msg, sizeof(query_response_msg_t));
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-			global_time_left = packet->loadingDeadline;
+			global_time_left = ntoh16(packet->loadingDeadline);
 			osMutexRelease(sddb_mutex);
 			break;
 
@@ -226,7 +227,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			packet = (query_response_msg_t *) comms_get_payload(comms, msg, sizeof(query_response_msg_t));
 
 			// WELCOME_RMSG should be one of the first ones we receive, so lets put this here
-			if(packet->senderAddr == SYSTEM_ADDR && first_msg)
+			if(ntoh16(packet->senderAddr) == SYSTEM_ADDR && first_msg)
 			{
 				system_address = comms_am_get_source(comms, msg);
 				first_msg = false;
@@ -239,6 +240,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			dest = comms_am_get_destination(comms, msg);
 			if(dest == my_address)
 			{
+				info1("My loc %u %u", packet->x_coordinate, packet->y_coordinate);
 				packet2.messageID = AS_QMSG;
 				packet2.senderAddr = my_address;
 				osMessageQueuePut(snd_msg_qID, &packet2, 0, 1000);
@@ -248,6 +250,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			packet = (query_response_msg_t *) comms_get_payload(comms, msg, sizeof(query_response_msg_t));
 			
 			info1("Rcv ship");
+			if(ntoh16(packet->shipAddr) == my_address)info1("My loc %u %u", packet->x_coordinate, packet->y_coordinate);
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 			add_ship(packet);
 			osMutexRelease(sddb_mutex);
@@ -263,12 +266,12 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 		case AS_QRMSG :
 
 			bpacket = (query_response_buf_t *) comms_get_payload(comms, msg, sizeof(query_response_buf_t));
-			if(bpacket->shipAddr == my_address) // Only if I made quiery
+			if(ntoh16(bpacket->shipAddr) == my_address) // Only if I made quiery
 			{
 				while(osMutexAcquire(asdb_mutex, 1000) != osOK);
 				for(i=0;i<bpacket->len;i++)
 				{
-					add_ship_addr(bpacket->ships[i]);
+					add_ship_addr(ntoh16(bpacket->ships[i]));
 				}
 				get_all_ships_data_in_progress = true;
 				osMutexRelease(asdb_mutex);
@@ -282,7 +285,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 			for(i=0;i<bpacket->len;i++)
 			{
-				mark_cargo(bpacket->ships[i]);
+				mark_cargo(ntoh16(bpacket->ships[i]));
 			}
 			osMutexRelease(sddb_mutex);
 			break;
@@ -307,7 +310,7 @@ static void send_msg_loop(void *args)
 	query_msg_t packet;
 	for(;;)
 	{
-		osMessageQueueGet(snd_msg_qID, (query_msg_t*) &packet, NULL, osWaitForever);
+		osMessageQueueGet(snd_msg_qID, &packet, NULL, osWaitForever);
 
 		osThreadFlagsWait(0x00000001U, osFlagsWaitAny, osWaitForever); // Flags are automatically cleared
 
@@ -318,8 +321,8 @@ static void send_msg_loop(void *args)
 			continue ;// Continue for(;;) loop
 		}
 		qmsg->messageID = packet.messageID;
-		qmsg->messageID = packet.senderAddr;
-		qmsg->messageID = packet.shipAddr;
+		qmsg->senderAddr = hton16(packet.senderAddr);
+		qmsg->shipAddr = hton16(packet.shipAddr);
 
 		// Send data packet
 	    comms_set_packet_type(sradio, &m_msg, AMID_SYSTEMCOMMUNICATION);
@@ -411,16 +414,22 @@ void mark_cargo(am_addr_t addr)
 	osMutexRelease(sddb_mutex);
 }
 
-uint8_t get_all_ship_addr(am_addr_t ship_addr[])
+// Returns cargo status of ship 'ship_addr'. Possible return values:
+// 0 - cargo has been received, cargo present
+// 1 - cargo has not been received, cargo not present
+// 2 - ship not in database, unknown ship
+// This function can block for 1000 kernel ticks.
+uint8_t getCargoStatus(am_addr_t ship_addr)
 {
-	uint8_t i, k;
+	uint8_t i, stat = 2;
 	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-	for(i=0;i<MAX_SHIPS;i++)
+	for(i=0;i<MAX_SHIPS;i++)if(ships[i].ship_addr == ship_addr && ships[i].ship_in_game)
 	{
-		if(ships[i].ship_in_game)ship_addr[k++] = ships[i].ship_addr;
+		if(ships[i].is_cargo_loaded)stat = 0;
+		else stat = 1;
 	}
 	osMutexRelease(sddb_mutex);
-	return k;
+	return stat;
 }
 
 static uint8_t get_empty_slot()
@@ -460,30 +469,31 @@ static void add_ship_addr(am_addr_t addr)
 	else ; // This ship is already in database
 }
 
+// Input argument is network packet, so use ntoh functions to read values
 static void add_ship(query_response_msg_t* ship)
 {
 	uint8_t ndx;
 	
-	if(ship->shipAddr == my_address)
+	if(ntoh16(ship->shipAddr) == my_address)
 	{
 		my_data.ship_in_game = true;
-		my_data.ship_addr = ship->shipAddr;
-		my_data.ship_deadline = ship->loadingDeadline;
+		my_data.ship_addr = ntoh16(ship->shipAddr);
+		my_data.ship_deadline = ntoh16(ship->loadingDeadline);
 		my_data.x_coordinate = ship->x_coordinate;
 		my_data.y_coordinate = ship->y_coordinate;
 		my_data.is_cargo_loaded = ship->isCargoLoaded;
 	}
 	else
 	{
-		ndx = get_index(ship->shipAddr);
+		ndx = get_index(ntoh16(ship->shipAddr));
 		if(ndx >= MAX_SHIPS)
 		{
 			ndx = get_empty_slot();
 			if(ndx < MAX_SHIPS)
 			{
 				ships[ndx].ship_in_game = true;
-				ships[ndx].ship_addr = ship->shipAddr;
-				ships[ndx].ship_deadline = ship->loadingDeadline;
+				ships[ndx].ship_addr = ntoh16(ship->shipAddr);
+				ships[ndx].ship_deadline = ntoh16(ship->loadingDeadline);
 				ships[ndx].x_coordinate = ship->x_coordinate;
 				ships[ndx].y_coordinate = ship->y_coordinate;
 				ships[ndx].is_cargo_loaded = ship->isCargoLoaded;

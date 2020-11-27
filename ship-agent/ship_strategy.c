@@ -19,6 +19,7 @@
 
 #include "mist_comm_am.h"
 #include "radio.h"
+#include "endianness.h"
 
 #include "ship_strategy.h"
 #include "clg_comm.h"
@@ -61,7 +62,8 @@ void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 
 	osThreadNew(start_coop, NULL, NULL); // Initiates cooperation message send
 	snd_task_id = osThreadNew(send_msg, NULL, NULL); // Sends messages
-	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets sending in a ready-to-send state
+
+	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
 }
 
 /**********************************************************************************************

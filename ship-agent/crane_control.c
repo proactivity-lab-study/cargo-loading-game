@@ -11,6 +11,7 @@
 
 #include "mist_comm_am.h"
 #include "radio.h"
+#include "endianness.h"
 
 #include "crane_control.h"
 #include "game_status.h"
@@ -29,7 +30,7 @@ typedef struct scmd_t
 }scmd_t;
 
 static scmd_t cmds[MAX_SHIPS];
-static uint32_t lastCraneEventTime = 0xefffffff; // Event initial value; kernel ticks
+uint32_t lastCraneEventTime = 0x0FFFFFFFU; // Event initial value; kernel ticks
 static crane_location_t cloc;
 
 // Some initial tactics choices
@@ -91,7 +92,7 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
     osThreadNew(commandMsgHandler, NULL, NULL);		// Handles received crane command messages
     osThreadNew(locationMsgHandler, NULL, NULL);	// Handles received crane location messages
     snd_task_id = osThreadNew(sendCommandMsg, NULL, NULL);		// Handles command message sending
-	osThreadFlagsSet(snd_task_id, 0x00000001U); 	// Sets sending in a ready-to-send state
+	osThreadFlagsSet(snd_task_id, 0x00000001U); 	// Sets thread to ready-to-send state
 	osThreadNew(craneMainLoop, NULL, NULL);			// Crane state changes
 }
 
@@ -101,7 +102,7 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 
 static void craneMainLoop(void *args)
 {
-	uint8_t cmd = 7; // CM_NOTHING_TO_DO
+	uint8_t cmd = 7, stat; // CM_NOTHING_TO_DO
 	uint32_t time_left, ticks;
 	loc_bundle_t loc;
 	crane_command_msg_t packet;
@@ -113,25 +114,29 @@ static void craneMainLoop(void *args)
 		
 		//TODO User code here: evaluate situation and choose tactics
 
-		time_left = CRANE_UPDATE_INTERVAL * osKernelGetTickFreq() + lastCraneEventTime - osKernelGetTickCount();
-		info1("time %lu", time_left);
-		if(time_left < ticks)
+		stat = getCargoStatus(my_address);
+		if(stat == 1)
 		{
-			Xfirst = false;	// This is a tactical choice and ship strategy module may want to change it
-			alwaysPlaceCargo = true; // This is a tactical choice and ship strategy module may want to change it
-			loc = get_ship_location(my_address);
-			
-			// This is a strategic chioce and ship strategy module may want to change it
-			cmd = goToDestination(loc.x, loc.y);
-			if(cmd != CM_NOTHING_TO_DO)
+			time_left = CRANE_UPDATE_INTERVAL * osKernelGetTickFreq() + lastCraneEventTime - osKernelGetTickCount();
+			if(time_left < ticks)
 			{
-				packet.messageID = CRANE_COMMAND_MSG;
-				packet.senderAddr = my_address;
-				packet.cmd = cmd;
-				info1("Cmnd sel %u", cmd);
-				osMessageQueuePut(smsg_qID, &packet, 0, 0);
+				Xfirst = false;	// This is a tactical choice and ship strategy module may want to change it
+				alwaysPlaceCargo = true; // This is a tactical choice and ship strategy module may want to change it
+				loc = get_ship_location(my_address);
+			
+				// This is a strategic chioce and ship strategy module may want to change it
+				cmd = goToDestination(loc.x, loc.y);
+				if(cmd != CM_NOTHING_TO_DO)
+				{
+					packet.messageID = CRANE_COMMAND_MSG;
+					packet.senderAddr = my_address;
+					packet.cmd = cmd;
+					info1("Cmnd sel %u", cmd);
+					osMessageQueuePut(smsg_qID, &packet, 0, 0);
+				}
 			}
 		}
+		else ; // Either I'm not in game, or I already have cargo
 	}
 }
 
@@ -159,7 +164,7 @@ void crane_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* u
 		crane_location_msg_t * packet = (crane_location_msg_t*)comms_get_payload(comms, msg, sizeof(crane_location_msg_t));
         debug1("rcv-l");
 
-		if(packet->messageID == CRANE_LOCATION_MSG && packet->senderAddr == CRANE_ADDR && first_msg)
+		if(packet->messageID == CRANE_LOCATION_MSG && ntoh16(packet->senderAddr) == CRANE_ADDR && first_msg)
 		{
 			crane_address = crane_addr;
 			first_msg = false;
@@ -180,7 +185,7 @@ static void locationMsgHandler(void *args)
 	for(;;)
 	{
 		osMessageQueueGet(lmsg_qID, &packet, NULL, osWaitForever);
-		if(packet.messageID == CRANE_LOCATION_MSG && packet.senderAddr == CRANE_ADDR)
+		if(packet.messageID == CRANE_LOCATION_MSG && ntoh16(packet.senderAddr) == CRANE_ADDR)
 		{
 			lastCraneEventTime = osKernelGetTickCount();
 			info1("Crane mov %lu %lu %u", packet.x_coordinate, packet.y_coordinate, packet.cargoPlaced);
@@ -219,7 +224,7 @@ static void commandMsgHandler(void *args)
 			while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
 			for(i=0;i<MAX_SHIPS;i++)
 			{
-				if(cmds[i].ship_addr == packet.senderAddr)
+				if(cmds[i].ship_addr == ntoh16(packet.senderAddr))
 				{
 					cmds[i].ship_cmd = packet.cmd;
 					break;
@@ -230,7 +235,7 @@ static void commandMsgHandler(void *args)
 				i = get_empty_slot();
 				if(i<MAX_SHIPS)
 				{
-					cmds[i].ship_addr = packet.senderAddr;
+					cmds[i].ship_addr = ntoh16(packet.senderAddr);
 					cmds[i].ship_cmd = packet.cmd;
 				}
 				else ; // Drop this ships command, cuz no room
@@ -256,7 +261,7 @@ static void sendCommandMsg(void *args)
 
 	for(;;)
 	{
-		osMessageQueueGet(smsg_qID, (crane_command_msg_t*) &packet, NULL, osWaitForever);
+		osMessageQueueGet(smsg_qID, &packet, NULL, osWaitForever);
 		
 		osThreadFlagsWait(0x00000001U, osFlagsWaitAny, osWaitForever); // Flags are automatically cleared
 
@@ -268,7 +273,7 @@ static void sendCommandMsg(void *args)
 		}
 
 		cMsg->messageID = packet.messageID;
-		cMsg->senderAddr = packet.senderAddr;
+		cMsg->senderAddr = hton16(packet.senderAddr);
 		cMsg->cmd = packet.cmd;
 			
 		// Send data packet
