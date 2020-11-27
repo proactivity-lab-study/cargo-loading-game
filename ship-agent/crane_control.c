@@ -102,7 +102,7 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 
 static void craneMainLoop(void *args)
 {
-	uint8_t cmd = 7; // CM_NOTHING_TO_DO
+	uint8_t cmd = 7, stat; // CM_NOTHING_TO_DO
 	uint32_t time_left, ticks;
 	loc_bundle_t loc;
 	crane_command_msg_t packet;
@@ -113,25 +113,30 @@ static void craneMainLoop(void *args)
 		osDelay(ticks);
 		
 		//TODO User code here: evaluate situation and choose tactics
-
-		time_left = CRANE_UPDATE_INTERVAL * osKernelGetTickFreq() + lastCraneEventTime - osKernelGetTickCount();
-		if(time_left < ticks)
+		
+		stat = getCargoStatus(my_address);
+		if(stat == 1)
 		{
-			Xfirst = false;	// This is a tactical choice and ship strategy module may want to change it
-			alwaysPlaceCargo = true; // This is a tactical choice and ship strategy module may want to change it
-			loc = get_ship_location(my_address);
-			
-			// This is a strategic chioce and ship strategy module may want to change it
-			cmd = goToDestination(loc.x, loc.y);
-			if(cmd != CM_NOTHING_TO_DO)
+			time_left = CRANE_UPDATE_INTERVAL * osKernelGetTickFreq() + lastCraneEventTime - osKernelGetTickCount();
+			if(time_left < ticks)
 			{
-				packet.messageID = CRANE_COMMAND_MSG;
-				packet.senderAddr = my_address;
-				packet.cmd = cmd;
-				info1("Cmnd sel %u", cmd);
-				osMessageQueuePut(smsg_qID, &packet, 0, 0);
+				Xfirst = false;	// This is a tactical choice and ship strategy module may want to change it
+				alwaysPlaceCargo = true; // This is a tactical choice and ship strategy module may want to change it
+				loc = get_ship_location(my_address);
+			
+				// This is a strategic chioce and ship strategy module may want to change it
+				cmd = goToDestination(loc.x, loc.y);
+				if(cmd != CM_NOTHING_TO_DO)
+				{
+					packet.messageID = CRANE_COMMAND_MSG;
+					packet.senderAddr = my_address;
+					packet.cmd = cmd;
+					info1("Cmnd sel %u", cmd);
+					osMessageQueuePut(smsg_qID, &packet, 0, 0);
+				}
 			}
 		}
+		else ; // Either I'm not in game, or I already have cargo
 	}
 }
 

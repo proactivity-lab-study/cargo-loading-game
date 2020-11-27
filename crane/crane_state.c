@@ -216,7 +216,6 @@ static void incomingMsgHandler(void *args)
 					while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
 					cmd_buf[index] = cmd;
 					osMutexRelease(cmdb_mutex);
-					info1("cmd rcv");
 				}
 				else ;// Ship not in game, command dropped
 			}

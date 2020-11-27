@@ -240,6 +240,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			dest = comms_am_get_destination(comms, msg);
 			if(dest == my_address)
 			{
+				info1("My loc %u %u", packet->x_coordinate, packet->y_coordinate);
 				packet2.messageID = AS_QMSG;
 				packet2.senderAddr = my_address;
 				osMessageQueuePut(snd_msg_qID, &packet2, 0, 1000);
@@ -249,6 +250,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			packet = (query_response_msg_t *) comms_get_payload(comms, msg, sizeof(query_response_msg_t));
 			
 			info1("Rcv ship");
+			if(ntoh16(packet->shipAddr) == my_address)info1("My loc %u %u", packet->x_coordinate, packet->y_coordinate);
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 			add_ship(packet);
 			osMutexRelease(sddb_mutex);
@@ -411,6 +413,25 @@ void mark_cargo(am_addr_t addr)
 	}
 	osMutexRelease(sddb_mutex);
 }
+
+// Returns cargo status of ship 'ship_addr'. Possible return values:
+// 0 - cargo has been received, cargo present
+// 1 - cargo has not been received, cargo not present
+// 2 - ship not in database, unknown ship
+// This function can block for 1000 kernel ticks.
+uint8_t getCargoStatus(am_addr_t ship_addr)
+{
+	uint8_t i, stat = 2;
+	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
+	for(i=0;i<MAX_SHIPS;i++)if(ships[i].ship_addr == ship_addr && ships[i].ship_in_game)
+	{
+		if(ships[i].is_cargo_loaded)stat = 0;
+		else stat = 1;
+	}
+	osMutexRelease(sddb_mutex);
+	return stat;
+}
+
 
 static uint8_t get_empty_slot()
 {

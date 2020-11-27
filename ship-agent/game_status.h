@@ -45,4 +45,11 @@ uint8_t  get_all_ships_addr(am_addr_t saddr[], uint8_t mlen);
 // This function can block for 1000 kernel ticks.
 am_addr_t get_ship_addr(loc_bundle_t sloc);
 
+// Returns cargo status of ship 'ship_addr'. Possible return values:
+// 0 - cargo has been received, cargo present
+// 1 - cargo has not been received, cargo not present
+// 2 - ship not in database, unknown ship
+// This function can block for 1000 kernel ticks.
+bool isCargoLoaded(am_addr_t ship_addr);
+
 #endif //GAME_STATUS_H_
