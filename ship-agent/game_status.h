@@ -50,6 +50,6 @@ am_addr_t get_ship_addr(loc_bundle_t sloc);
 // 1 - cargo has not been received, cargo not present
 // 2 - ship not in database, unknown ship
 // This function can block for 1000 kernel ticks.
-bool isCargoLoaded(am_addr_t ship_addr);
+uint8_t getCargoStatus(am_addr_t ship_addr);
 
 #endif //GAME_STATUS_H_

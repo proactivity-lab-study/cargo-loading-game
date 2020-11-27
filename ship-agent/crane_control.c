@@ -92,7 +92,7 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
     osThreadNew(commandMsgHandler, NULL, NULL);		// Handles received crane command messages
     osThreadNew(locationMsgHandler, NULL, NULL);	// Handles received crane location messages
     snd_task_id = osThreadNew(sendCommandMsg, NULL, NULL);		// Handles command message sending
-	osThreadFlagsSet(snd_task_id, 0x00000001U); 	// Sets thread to read-to-send state
+	osThreadFlagsSet(snd_task_id, 0x00000001U); 	// Sets thread to ready-to-send state
 	osThreadNew(craneMainLoop, NULL, NULL);			// Crane state changes
 }
 
