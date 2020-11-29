@@ -34,7 +34,6 @@ typedef struct ship_data_t{
 static am_addr_t ship_addr[MAX_SHIPS]; // Protected by asdb_mutex
 
 static ship_data_t ships[MAX_SHIPS]; // Protected by sddb_mutex
-static ship_data_t my_data; // Protected by sddb_mutex
 
 uint32_t global_time_left; // Protected by sddb_mutex
 
@@ -94,12 +93,6 @@ void init_system_status(comms_layer_t* radio, am_addr_t addr)
 		ships[i].y_coordinate = 0;
 		ships[i].is_cargo_loaded = false;
 	}
-	my_data.ship_in_game = false;
-	my_data.ship_addr = 0;
-	my_data.ship_deadline = 0;
-	my_data.x_coordinate = 0;
-	my_data.y_coordinate = 0;
-	my_data.is_cargo_loaded = false;
 	osMutexRelease(sddb_mutex);
 
 	while(osMutexAcquire(asdb_mutex, 1000) != osOK);
@@ -169,7 +162,7 @@ static void welcome_msg_loop(void *args)
 	for(;;)
 	{
 		while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-		if(my_data.ship_in_game != true)
+		if(get_index(my_address) >= MAX_SHIPS)
 		{
 			osMutexRelease(sddb_mutex);
 			packet.messageID = WELCOME_MSG;
@@ -285,7 +278,7 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 			for(i=0;i<bpacket->len;i++)
 			{
-				mark_cargo(ntoh16(bpacket->ships[i]));
+				markCargo(ntoh16(bpacket->ships[i]));
 			}
 			osMutexRelease(sddb_mutex);
 			break;
@@ -340,7 +333,7 @@ static void send_msg_loop(void *args)
  **********************************************************************************************/
 
 // Returns location of ship, if no such ship, returns 0 for both coordinates.
-// This function can block for 1000 kernel ticks.
+// This function can block.
 loc_bundle_t get_ship_location(am_addr_t ship_addr)
 {
 	loc_bundle_t sloc;
@@ -348,14 +341,9 @@ loc_bundle_t get_ship_location(am_addr_t ship_addr)
 	
 	sloc.x = sloc.y = 0;
 	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-	if(ship_addr == my_address)
+	ndx = get_index(ship_addr);
+	if(ndx < MAX_SHIPS)
 	{
-		sloc.x = my_data.x_coordinate;
-		sloc.y = my_data.y_coordinate;
-	}
-	else
-	{
-		ndx = get_index(ship_addr);
 		sloc.x = ships[ndx].x_coordinate;
 		sloc.y = ships[ndx].y_coordinate;
 	}
@@ -364,7 +352,7 @@ loc_bundle_t get_ship_location(am_addr_t ship_addr)
 }
 
 // Returns address of ship in location 'sloc' or 0 if no ship in this location.
-// This function can block for 1000 kernel ticks.
+// This function can block.
 am_addr_t get_ship_addr(loc_bundle_t sloc)
 {
 	am_addr_t addr = 0;
@@ -385,7 +373,7 @@ am_addr_t get_ship_addr(loc_bundle_t sloc)
 
 // Fills buffer pointed to by 'saddr' with addresses of all ships currently known.
 // Returns number of ships added to buffer 'saddr'.
-// This function can block for 1000 kernel ticks.
+// This function can block.
 uint8_t get_all_ships_addr(am_addr_t saddr[], uint8_t mlen)
 {
 	uint8_t i, len = 0;
@@ -401,8 +389,8 @@ uint8_t get_all_ships_addr(am_addr_t saddr[], uint8_t mlen)
 
 // Marks cargo status as true for ship with address 'addr', if such a ship is found.
 // Use with care! There is no revers command to mark cargo status false.
-// This function can block for 1000 kernel ticks.
-void mark_cargo(am_addr_t addr)
+// This function can block.
+void markCargo(am_addr_t addr)
 {
 	uint8_t i;
 	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
@@ -418,7 +406,7 @@ void mark_cargo(am_addr_t addr)
 // 0 - cargo has been received, cargo present
 // 1 - cargo has not been received, cargo not present
 // 2 - ship not in database, unknown ship
-// This function can block for 1000 kernel ticks.
+// This function can block.
 uint8_t getCargoStatus(am_addr_t ship_addr)
 {
 	uint8_t i, stat = 2;
@@ -475,35 +463,23 @@ static void add_ship(query_response_msg_t* ship)
 {
 	uint8_t ndx;
 	
-	if(ntoh16(ship->shipAddr) == my_address)
+	ndx = get_index(ntoh16(ship->shipAddr));
+	if(ndx >= MAX_SHIPS)
 	{
-		my_data.ship_in_game = true;
-		my_data.ship_addr = ntoh16(ship->shipAddr);
-		my_data.ship_deadline = ntoh16(ship->loadingDeadline);
-		my_data.x_coordinate = ship->x_coordinate;
-		my_data.y_coordinate = ship->y_coordinate;
-		my_data.is_cargo_loaded = ship->isCargoLoaded;
-	}
-	else
-	{
-		ndx = get_index(ntoh16(ship->shipAddr));
-		if(ndx >= MAX_SHIPS)
+		ndx = get_empty_slot();
+		if(ndx < MAX_SHIPS)
 		{
-			ndx = get_empty_slot();
-			if(ndx < MAX_SHIPS)
-			{
-				ships[ndx].ship_in_game = true;
-				ships[ndx].ship_addr = ntoh16(ship->shipAddr);
-				ships[ndx].ship_deadline = ntoh16(ship->loadingDeadline);
-				ships[ndx].x_coordinate = ship->x_coordinate;
-				ships[ndx].y_coordinate = ship->y_coordinate;
-				ships[ndx].is_cargo_loaded = ship->isCargoLoaded;
-			}
-			else ; // No room
-		}
-		else // Already got this ship, update only cargo status
-		{
+			ships[ndx].ship_in_game = true;
+			ships[ndx].ship_addr = ntoh16(ship->shipAddr);
+			ships[ndx].ship_deadline = ntoh16(ship->loadingDeadline);
+			ships[ndx].x_coordinate = ship->x_coordinate;
+			ships[ndx].y_coordinate = ship->y_coordinate;
 			ships[ndx].is_cargo_loaded = ship->isCargoLoaded;
 		}
+		else ; // No room
+	}
+	else // Already got this ship, update only cargo status
+	{
+		ships[ndx].is_cargo_loaded = ship->isCargoLoaded;
 	}
 }

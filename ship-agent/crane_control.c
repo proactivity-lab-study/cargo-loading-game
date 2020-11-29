@@ -134,7 +134,7 @@ static void craneMainLoop(void *args)
 					info1("Cmnd sel %u", cmd);
 					osMessageQueuePut(smsg_qID, &packet, 0, 0);
 				}
-			}
+			}else ;
 		}
 		else ; // Either I'm not in game, or I already have cargo
 	}
@@ -202,7 +202,7 @@ static void locationMsgHandler(void *args)
 				sloc.x = packet.x_coordinate;
 				sloc.y = packet.y_coordinate;
 				saddr = get_ship_addr(sloc);
-				if(saddr != 0)mark_cargo(saddr);
+				if(saddr != 0)markCargo(saddr);
 			}
 
 			clear_cmds_buf(); // Clear contents of cmds buffer
@@ -459,9 +459,7 @@ static uint8_t selectCommandYFirst(uint8_t x, uint8_t y)
  **********************************************************************************************/
 
 // Returns distance to crane, zero distance means crane is at location (x; y).
-// If crane location data is unavailable for more than 1000 kernel ticks, returns 
-// last available crane location. Availability here is related to cloc_mutex.
-// This function can block for 1000 kernel ticks.
+// This function can block.
 uint16_t distToCrane(uint8_t x, uint8_t y)
 {
 	static uint16_t dist;

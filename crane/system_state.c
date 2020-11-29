@@ -330,6 +330,7 @@ static void sendResponseBuf(void *arg)
  *	Utility functions
  **********************************************************************************************/
 
+// Returns buffer index of ship with address 'id' or value MAX_SHIPS if no such ship.
 uint8_t getIndex(am_addr_t id)
 {
 	uint8_t k;
@@ -337,20 +338,59 @@ uint8_t getIndex(am_addr_t id)
 	return k;
 }
 
+// Returns address of ship in location 'x', 'y' or 0 if no ship in this location.
+// This function can block.
+am_addr_t isShipHere(uint8_t x, uint8_t y)
+{
+	am_addr_t addr = 0;
+	uint8_t i;
+
+	while(osMutexAcquire(sdb_mutex, 1000) != osOK);
+	for(i=0;i<MAX_SHIPS;i++)
+	{
+		if(ship_db[i].x_coordinate == x && ship_db[i].y_coordinate == y && ship_db[i].shipInGame)	
+		{
+			addr = ship_db[i].shipAddr;
+			break;
+		}
+	}
+	osMutexRelease(sdb_mutex);
+	return addr;
+}
+
+// Marks cargo status as true for ship with address 'addr', if such a ship is found.
+// Use with care! There is no revers command to mark cargo status false.
+// This function can block.
+void markCargo(am_addr_t addr)
+{
+	uint8_t i;
+	while(osMutexAcquire(sdb_mutex, 1000) != osOK);
+	for(i=0;i<MAX_SHIPS;i++)if(ship_db[i].shipAddr == addr && ship_db[i].shipInGame)
+	{
+		ship_db[i].isCargoLoaded = true;
+		break;
+	}
+	osMutexRelease(sdb_mutex);
+}
+
 static uint8_t registerNewShip(am_addr_t shipAddr)
 {
 	uint8_t index = getIndex(shipAddr);
 
-	if(index >= MAX_SHIPS)index = getEmptySlot();
-	
-	if(index < MAX_SHIPS)
+	if(index >= MAX_SHIPS)
 	{
-		genNewCoordinates(index);
-		genLoadTime(index);
-		ship_db[index].isCargoLoaded = false;
-		ship_db[index].shipAddr = shipAddr;
-		ship_db[index].shipInGame = true;
+		index = getEmptySlot();
+	
+		if(index < MAX_SHIPS)
+		{
+			genNewCoordinates(index);
+			genLoadTime(index);
+			ship_db[index].isCargoLoaded = false;
+			ship_db[index].shipAddr = shipAddr;
+			ship_db[index].shipInGame = true;
+		}
 	}
+	else ; // Ship already registered
 	return index;
 }
 

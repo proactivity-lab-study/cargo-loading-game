@@ -26,9 +26,7 @@ void crane_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* u
  **********************************************************************************************/
 
 // Returns distance to crane, zero distance means crane is at location (x; y).
-// If crane location data is unavailable for more than 1000 kernel ticks, returns 
-// last available crane location. Availability here is related to cloc_mutex.
-// This function can block for 1000 kernel ticks.
+// This function can block.
 uint16_t distToCrane(uint8_t x, uint8_t y);
 
 #endif //CRANE_CONTROL_H_

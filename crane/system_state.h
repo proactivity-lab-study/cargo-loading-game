@@ -35,6 +35,16 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
  *	Utility functions
  **********************************************************************************************/
 
+// Returns buffer index of ship with address 'id' or value MAX_SHIPS if no such ship.
 uint8_t getIndex(am_addr_t ship_addr);
+
+// Marks cargo status as true for ship with address 'addr', if such a ship is found.
+// Use with care! There is no revers command to mark cargo status false.
+// This function can block.
+void markCargo(am_addr_t addr);
+
+// Returns address of ship in location 'x', 'y' or 0 if no ship in this location.
+// This function can block.
+am_addr_t isShipHere(uint8_t x, uint8_t y);
 
 #endif//SYSTEM_STATE_H_
