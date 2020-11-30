@@ -22,6 +22,7 @@
 #include "endianness.h"
 
 #include "ship_strategy.h"
+#include "crane_control.h"
 #include "clg_comm.h"
 #include "game_types.h"
 
@@ -46,11 +47,18 @@ static void send_msg(void *args);
 
 void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 {
+	loc_bundle_t loc;
+
 	snd_msg_qID = osMessageQueueNew(9, sizeof(query_msg_t), NULL);
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
-	my_address = addr; 	//This is the only write, so not going to protect it with mutex
+	my_address = addr; 	// This is the only write, so not going to protect it with mutex
 
+	setXFirst(true);
+	setAlwaysPlaceCargo(true);
+	loc.x = loc.y = 0;
+	setCraneTactics(cc_do_nothing, 0, loc);
+	
 	osThreadNew(not_much, NULL, NULL); // Empty thread
 	snd_task_id = osThreadNew(send_msg, NULL, NULL); // Sends messages
 	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state

@@ -43,8 +43,8 @@ enum
 #define CRANE_UPDATE_INTERVAL 3UL // Seconds
 #define MAX_SHIPS 10 // Maximum number of ships in game
 
-#define GRID_LOWER_BOUND 2 	// Including
-#define GRID_UPPER_BOUND 30 // Including
+#define GRID_LOWER_BOUND 2 	// Including - grid lower bound should be > 0
+#define GRID_UPPER_BOUND 30 // Including - grid upper bound should be < 255
 
 #define DURATION_OF_GAME 900UL 	// Seconds
 #define DEFAULT_TIME 300 		// Seconds

@@ -122,8 +122,8 @@ void setup_loop (void * arg)
         for (;;); // Panic
     }
 
-	init_crane_control(radio, node_addr);
-	init_system_status(radio, node_addr);
+	init_system_status(radio, node_addr); // This should be first
+	init_crane_control(radio, node_addr); // This should be second
 	init_ship_strategy(radio, node_addr);
 
     // Loop forever

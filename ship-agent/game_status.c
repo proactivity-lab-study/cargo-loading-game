@@ -334,7 +334,7 @@ static void send_msg_loop(void *args)
 
 // Returns location of ship, if no such ship, returns 0 for both coordinates.
 // This function can block.
-loc_bundle_t get_ship_location(am_addr_t ship_addr)
+loc_bundle_t getShipLocation(am_addr_t ship_addr)
 {
 	loc_bundle_t sloc;
 	uint8_t ndx;
@@ -353,7 +353,7 @@ loc_bundle_t get_ship_location(am_addr_t ship_addr)
 
 // Returns address of ship in location 'sloc' or 0 if no ship in this location.
 // This function can block.
-am_addr_t get_ship_addr(loc_bundle_t sloc)
+am_addr_t getShipAddr(loc_bundle_t sloc)
 {
 	am_addr_t addr = 0;
 	uint8_t i;
@@ -374,7 +374,7 @@ am_addr_t get_ship_addr(loc_bundle_t sloc)
 // Fills buffer pointed to by 'saddr' with addresses of all ships currently known.
 // Returns number of ships added to buffer 'saddr'.
 // This function can block.
-uint8_t get_all_ships_addr(am_addr_t saddr[], uint8_t mlen)
+uint8_t getAllShipsAddr(am_addr_t saddr[], uint8_t mlen)
 {
 	uint8_t i, len = 0;
 
