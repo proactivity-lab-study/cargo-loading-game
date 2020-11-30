@@ -115,7 +115,7 @@ void init_system(comms_layer_t* radio, am_addr_t my_addr)
 	snd_msg_qID = osMessageQueueNew(9, sizeof(query_response_msg_t), NULL);	// For response messages
 	snd_buf_qID = osMessageQueueNew(9, sizeof(query_response_buf_t), NULL);	// For response messages
 
-	snd_event_id = osEventFlagsNew(NULL);
+	snd_event_id = osEventFlagsNew(NULL);  // Using one event flag for two send threads. Possible starvation??
 	osEventFlagsSet(snd_event_id, 0x00000001U); // Sets send threads to ready-to-send state
 
 	osThreadNew(incomingMsgHandler, NULL, NULL);	// Handles incoming messages and responses to
