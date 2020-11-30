@@ -122,13 +122,14 @@ void init_crane(comms_layer_t* radio, am_addr_t my_addr)
 	osThreadNew(craneMainLoop, NULL, NULL);		// Crane state changes
 	snd_task_id = osThreadNew(sendLocationMsg, NULL, NULL);	// Sends crane location info
 	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
-
 }
 
 void init_crane_loc()
 {
 	// Get crane start location
+
 	while(osMutexAcquire(cloc_mutex, 1000) != osOK)
+	rand(); // TODO rand() always starts with 0, wtf?
 	cloc.crane_y = randomNumber(GRID_LOWER_BOUND, GRID_UPPER_BOUND);
 	cloc.crane_x = randomNumber(GRID_LOWER_BOUND, GRID_UPPER_BOUND);
 	cloc.cargo_here = false;
@@ -150,15 +151,14 @@ static void craneMainLoop(void *args)
 		wcmd = getWinningCmd();
 
 		while(osMutexAcquire(cloc_mutex, 1000) != osOK);
-		
-		doCommand(wcmd);
+		info("wcmd %u",wcmd);
+		if(wcmd > 0 && wcmd < CM_CURRENT_LOCATION)doCommand(wcmd);
 		sloc.messageID = CRANE_LOCATION_MSG;
 		sloc.senderAddr = my_address;
 		sloc.x_coordinate = cloc.crane_x;
 		sloc.y_coordinate = cloc.crane_y;
 		sloc.cargoPlaced = cloc.cargo_here;
-		osMessageQueuePut(smsg_qID, &sloc, 0, 0);
-		
+		osMessageQueuePut(smsg_qID, &sloc, 0, 0);	
 		osMutexRelease(cloc_mutex);
 		
 		info1("Location %u %u %u", sloc.x_coordinate, sloc.y_coordinate, sloc.cargoPlaced);
@@ -193,10 +193,10 @@ static void incomingMsgHandler(void *args)
 		osMessageQueueGet(rmsg_qID, &packet, NULL, osWaitForever);
 		if(packet.messageID == CRANE_COMMAND_MSG)
 		{
-			info("Rcvd %u %u", ntoh16(packet.senderAddr), packet.cmd);
 			cmd = packet.cmd;
 			if(cmd == CM_CURRENT_LOCATION)
 			{
+				info("Rcvd %u %u", ntoh16(packet.senderAddr), packet.cmd);
 				while(osMutexAcquire(cloc_mutex, 1000) != osOK);
 				sloc.messageID = CRANE_LOCATION_MSG;
 				sloc.senderAddr = CRANE_ADDR;
@@ -216,6 +216,7 @@ static void incomingMsgHandler(void *args)
 				{
 					while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
 					cmd_buf[index] = cmd;
+					info("Rcvd %u %u", ntoh16(packet.senderAddr), packet.cmd);
 					osMutexRelease(cmdb_mutex);
 				}
 				else ;// Ship not in game, command dropped
@@ -232,7 +233,13 @@ static void incomingMsgHandler(void *args)
 
 static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-cs %u", result);
+	uint8_t i;
+
+    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
+	while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
+	for(i=0;i<MAX_SHIPS;i++)cmd_buf[i] = 0; // Clearing buffer for next round
+	osMutexRelease(cmdb_mutex);	
+
 	osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
@@ -283,13 +290,14 @@ static uint8_t getWinningCmd()
 
 	// Find most popular command
 	while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
-	for(i=0;i<6;i++)
+	for(i=0;i<MAX_SHIPS;i++)
 	{
 		if(cmd_buf[i] != 0)
 		{
 			votes[cmd_buf[i]]++;
 			atLeastOne = true;
 		}
+		cmd_buf[i] = 0; // Clear command buffer
 	}
 	osMutexRelease(cmdb_mutex);
 
@@ -330,6 +338,7 @@ static uint8_t getWinningCmd()
 
 static void doCommand(uint8_t wcmd)
 {
+	am_addr_t saddr;
 	cloc.cargo_here = false;
 	switch(wcmd)
 	{
@@ -343,9 +352,11 @@ static void doCommand(uint8_t wcmd)
 		break;
 		case CM_PLACE_CARGO: 
 			cloc.cargo_here = true;
+			saddr = isShipHere(cloc.crane_x, cloc.crane_y);
+			if(saddr != 0)markCargo(saddr);
 			info1("Cargo placed");
 		break;
-		default: cloc.cargo_here = true; //Incorrect command, restore cargo status
+		default: 
 		break;
 	}
 }

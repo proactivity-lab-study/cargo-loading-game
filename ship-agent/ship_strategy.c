@@ -22,6 +22,7 @@
 #include "endianness.h"
 
 #include "ship_strategy.h"
+#include "crane_control.h"
 #include "clg_comm.h"
 #include "game_types.h"
 #include "game_status.h"
@@ -55,14 +56,20 @@ static uint16_t calcDistance(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2);
 
 void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 {
+	loc_bundle_t loc;
+
 	snd_msg_qID = osMessageQueueNew(9, sizeof(query_msg_t), NULL);
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
-	my_address = addr; 	//This is the only write, so not going to protect it with mutex
+	my_address = addr; 	// This is the only write, so not going to protect it with mutex
 
-	osThreadNew(start_coop, NULL, NULL); // Initiates cooperation message send
+	setXFirst(true);
+	setAlwaysPlaceCargo(true);
+	loc.x = loc.y = 0;
+	setCraneTactics(cc_do_nothing, 0, loc);
+	
+	osThreadNew(start_coop, NULL, NULL); // Empty thread
 	snd_task_id = osThreadNew(send_msg, NULL, NULL); // Sends messages
-
 	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
 }
 
@@ -233,21 +240,21 @@ am_addr_t get_nearest_n()
 
 	loc_bundle_t sloc, my_loc;
 
-	num_ships = get_all_ships_addr(ship_addresses, MAX_SHIPS);
+	num_ships = getAllShipsAddr(ship_addresses, MAX_SHIPS);
 	
 	saddr = my_address;
 
 	if(num_ships > 0)
 	{
-		my_loc = get_ship_location(my_address);
+		my_loc = getShipLocation(my_address);
 
-		sloc = get_ship_location(ship_addresses[0]);
+		sloc = getShipLocation(ship_addresses[0]);
 		smallest_dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
 		saddr = ship_addresses[0];
 
 		for(i=1;i<num_ships;i++)
 		{
-			sloc = get_ship_location(ship_addresses[i]);
+			sloc = getShipLocation(ship_addresses[i]);
 			dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
 			if(dist < smallest_dist)
 			{

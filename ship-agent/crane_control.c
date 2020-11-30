@@ -30,14 +30,18 @@ typedef struct scmd_t
 }scmd_t;
 
 static scmd_t cmds[MAX_SHIPS];
-uint32_t lastCraneEventTime = 0x0FFFFFFFU; // Event initial value; kernel ticks
+static uint32_t lastCraneEventTime = 0x0FFFFFFFU; // Event initial value; kernel ticks
 static crane_location_t cloc;
 
 // Some initial tactics choices
-bool Xfirst = true; // Which coordinate to use first, x is default
-bool alwaysPlaceCargo = true; // Always send 'place cargo' command when crane is on top of a ship
+static bool Xfirst = true; // Which coordinate to use first, x is default
+static bool alwaysPlaceCargo = true; // Always send 'place cargo' command when crane is on top of a ship
 
-static osMutexId_t cmdb_mutex, cloc_mutex;
+static uint8_t tactic;
+static am_addr_t tactic_addr;
+static loc_bundle_t tactic_loc;
+
+static osMutexId_t cmdb_mutex, cloc_mutex, cctt_mutex;
 static osMessageQueueId_t cmsg_qID, lmsg_qID, smsg_qID;
 static osThreadId_t snd_task_id;
 
@@ -71,6 +75,7 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 
 	cmdb_mutex = osMutexNew(NULL);				// Protects ships' crane command database
 	cloc_mutex = osMutexNew(&cloc_Mutex_attr);	// Protects current crane location values
+	cctt_mutex = osMutexNew(NULL);				// Protects tactics related variables
 	
 	smsg_qID = osMessageQueueNew(9, sizeof(crane_command_msg_t), NULL); // Send queue
 	cmsg_qID = osMessageQueueNew(9, sizeof(crane_command_msg_t), NULL); // Receive queue
@@ -89,6 +94,12 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 	cloc.cargo_here = false;
 	osMutexRelease(cloc_mutex);
 
+	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+	tactic = cc_to_location;
+	tactic_loc.x = tactic_loc.y = 0; // Most likely I don't have a location yet
+	tactic_addr = my_address;
+	osMutexRelease(cctt_mutex);
+
     osThreadNew(commandMsgHandler, NULL, NULL);		// Handles received crane command messages
     osThreadNew(locationMsgHandler, NULL, NULL);	// Handles received crane location messages
     snd_task_id = osThreadNew(sendCommandMsg, NULL, NULL);		// Handles command message sending
@@ -102,8 +113,10 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 
 static void craneMainLoop(void *args)
 {
-	uint8_t cmd = 7, stat; // CM_NOTHING_TO_DO
+	uint8_t cmd = CM_NOTHING_TO_DO;
+	uint8_t  stat, tt;
 	uint32_t time_left, ticks;
+	am_addr_t addr;
 	loc_bundle_t loc;
 	crane_command_msg_t packet;
 
@@ -112,31 +125,80 @@ static void craneMainLoop(void *args)
 	{
 		osDelay(ticks);
 		
-		//TODO User code here: evaluate situation and choose tactics
-
-		stat = getCargoStatus(my_address);
-		if(stat == 1)
+		time_left = CRANE_UPDATE_INTERVAL*osKernelGetTickFreq() + lastCraneEventTime - osKernelGetTickCount();
+		if(time_left < ticks)
 		{
-			time_left = CRANE_UPDATE_INTERVAL * osKernelGetTickFreq() + lastCraneEventTime - osKernelGetTickCount();
-			if(time_left < ticks)
+			while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+			tt = tactic;
+			addr = tactic_addr;
+			loc = tactic_loc;
+			osMutexRelease(cctt_mutex);
+
+			switch(tt)
 			{
-				Xfirst = false;	// This is a tactical choice and ship strategy module may want to change it
-				alwaysPlaceCargo = true; // This is a tactical choice and ship strategy module may want to change it
-				loc = get_ship_location(my_address);
-			
-				// This is a strategic chioce and ship strategy module may want to change it
-				cmd = goToDestination(loc.x, loc.y);
-				if(cmd != CM_NOTHING_TO_DO)
-				{
-					packet.messageID = CRANE_COMMAND_MSG;
-					packet.senderAddr = my_address;
-					packet.cmd = cmd;
-					info1("Cmnd sel %u", cmd);
-					osMessageQueuePut(smsg_qID, &packet, 0, 0);
-				}
+				case cc_do_nothing : 		// Don't send crane control command messages
+
+					cmd = CM_NOTHING_TO_DO;
+					break;
+
+				case cc_to_address :		// Call crane to specified ship and place cargo
+
+					stat = getCargoStatus(addr);
+					if(stat == 1)
+					{
+						loc = getShipLocation(addr);
+						cmd = goToDestination(loc.x, loc.y);
+					}
+					else cmd = CM_NOTHING_TO_DO; // Nothing to do, cuz cargo placed or no such ship
+					break;
+
+				case cc_to_location :		// Call crane to specified location and place cargo
+
+					stat = getCargoStatus(getShipAddr(loc));
+					if(stat == 1)
+					{
+						cmd = goToDestination(loc.x, loc.y);
+					}
+					else cmd = CM_NOTHING_TO_DO; // Nothing to do, cuz cargo placed or no such ship
+					break;
+
+				case cc_parrot_ship :		// Send same command message as specified ship
+
+					stat = getCargoStatus(addr);
+					if(stat == 1)
+					{
+						cmd = parrotShip(addr);
+					}
+					else cmd = CM_NOTHING_TO_DO; // Nothing to do, cuz cargo placed or no such ship
+					break;
+
+				case cc_popular_command	:	// Send the command that is currently most popular
+
+					stat = getCargoStatus(addr);
+					if(stat == 1)
+					{
+						cmd = selectPopular(addr);
+					}
+					else cmd = CM_NOTHING_TO_DO; // Nothing to do, cuz cargo placed or no such ship
+					break;
+
+				default :
+
+					cmd = CM_NOTHING_TO_DO;
+					break;
 			}
+
+			if(cmd != CM_NOTHING_TO_DO)
+			{
+				packet.messageID = CRANE_COMMAND_MSG;
+				packet.senderAddr = my_address;
+				packet.cmd = cmd;
+				info1("Cmnd sel %u", cmd);
+				osMessageQueuePut(smsg_qID, &packet, 0, 0);
+			}
+			else ; // Nothing to do
 		}
-		else ; // Either I'm not in game, or I already have cargo
+		else ; // There is still time until crane update event, wait!
 	}
 }
 
@@ -201,8 +263,8 @@ static void locationMsgHandler(void *args)
 			{
 				sloc.x = packet.x_coordinate;
 				sloc.y = packet.y_coordinate;
-				saddr = get_ship_addr(sloc);
-				if(saddr != 0)mark_cargo(saddr);
+				saddr = getShipAddr(sloc);
+				if(saddr != 0)markCargo(saddr);
 			}
 
 			clear_cmds_buf(); // Clear contents of cmds buffer
@@ -288,8 +350,97 @@ static void sendCommandMsg(void *args)
 }
 
 /**********************************************************************************************
- *	Crane command tactics
+ *	Crane command and tactics functions
  **********************************************************************************************/
+
+// Sets whether crane is commanded to move along x coordinate first or along y coordinate first.
+// Used with tactic 'cc_to_address' and 'cc_to_location'.
+// This function can block.
+void setXFirst(bool val)
+{
+	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+	Xfirst = val;
+	osMutexRelease(cctt_mutex);
+}
+
+// Returns whether crane is commanded to move along x coordinate first or along y coordinate first.
+// Used with tactic 'cc_to_address' and 'cc_to_location'.
+// This function can block.
+bool getXFirst()
+{
+	bool val;
+
+	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+	val = Xfirst;
+	osMutexRelease(cctt_mutex);
+	
+	return val;
+}
+
+// Sets whether cargo is always placed whenever crane is at some ship location.
+// Setting 'true' results in always issuing place cargo commend when crane is at some ship location.
+// Setting 'false' results in placing cargo only at location designated by chosen tactics.
+// Used with tactic 'cc_to_address' and 'cc_to_location'.
+// This function can block.
+void setAlwaysPlaceCargo(bool val)
+{
+	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+	alwaysPlaceCargo = val;
+	osMutexRelease(cctt_mutex);
+}
+
+// Returns cargo placement tactics choice. 
+// If 'true' cargo is placed on always when crane is at some ship location.
+// If 'false' cargo is only placed at location designated by chosen tactics.
+// Used with tactic 'cc_to_address' and 'cc_to_location'.
+// This function can block.
+bool getAlwaysPlaceCargo()
+{
+	bool val;
+
+	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+	val = alwaysPlaceCargo;
+	osMutexRelease(cctt_mutex);
+
+	return val;
+}
+
+// Sets tactical choise for crane command selection.
+// Possible choices are defined in crane_control.h
+// Currently these are 'cc_do_nothing', 'cc_to_address', 'cc_to_location', 'cc_parrot_ship'
+// and 'cc_popular_command'.
+// This function can block.
+void setCraneTactics(uint8_t tt, am_addr_t ship_addr, loc_bundle_t loc)
+{
+	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+	tactic = tt;
+	tactic_addr = ship_addr;
+	tactic_loc = loc;
+	osMutexRelease(cctt_mutex);
+}
+
+// Returns current tactical choise.
+// Possible return values are defined in crane_control.h
+// Currently these are 'cc_do_nothing', 'cc_to_address', 'cc_to_location', 'cc_parrot_ship'
+// and 'cc_popular_command'.
+// This function can block.
+uint8_t getCraneTactics(am_addr_t *ship_addr, loc_bundle_t *loc)
+{
+	uint8_t tt;
+	static am_addr_t addr;
+	static loc_bundle_t l;
+	
+	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+	tt = tactic;
+	addr = tactic_addr;
+	l = tactic_loc;
+	osMutexRelease(cctt_mutex);
+
+	ship_addr = &addr;
+	loc = &l;
+	
+	return tt;
+}
 
 // Selects an appropriate command to get the crane to location (x; y)
 // Takes into account 'Xfirst' and 'alwaysPlaceCargo' choices.
@@ -298,7 +449,7 @@ static uint8_t goToDestination(uint8_t x, uint8_t y)
 {
 	uint8_t cmd;
 	while(osMutexAcquire(cloc_mutex, 1000) != osOK);
-	cmd = selectCommand(x, y);
+	if(x != 0 && y != 0)cmd = selectCommand(x, y);
 	osMutexRelease(cloc_mutex);
 	return cmd;
 }
@@ -326,7 +477,7 @@ static uint8_t parrotShip(am_addr_t sID)
 }
 
 // Returns most popular command sent by all other ships this round.
-// In case of tie favors the first most popular choice found.
+// In case of tie, favors the first most popular choice found.
 // If no ship or commands, returns CM_NOTHING_TO_DO.
 static uint8_t selectPopular()
 {
@@ -386,24 +537,34 @@ static uint8_t selectPopular()
 static uint8_t selectCommand(uint8_t x, uint8_t y)
 {
 	uint8_t len = 0, i;
+	bool x_first, placeCargo;
 	am_addr_t ships[MAX_SHIPS];
 	loc_bundle_t sloc;
+
+	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+	x_first = Xfirst;
+	placeCargo = alwaysPlaceCargo;
+	osMutexRelease(cctt_mutex);
 
 	// First check if cargo was placed in the last round, if not, maybe we need to
 	if(!cloc.cargo_here)
 	{
 		// There is no cargo in this place, is there a ship here and do we need to place cargo?
-		if(alwaysPlaceCargo)
+		if(placeCargo)
 		{
-			len = get_all_ships_addr(ships, MAX_SHIPS);
+			len = getAllShipsAddr(ships, MAX_SHIPS);
 
 			if(len > 0 && len <= MAX_SHIPS)
 			{
 				for(i=0;i<len;i++)
 				{
-					sloc = get_ship_location(ships[i]);
+					sloc = getShipLocation(ships[i]);
 					// If there is a ship here, then only reasonable command is place cargo
-					if(distToCrane(sloc.x, sloc.y) == 0)return CM_PLACE_CARGO;// Found ship in this location
+					if(distToCrane(sloc.x, sloc.y) == 0)
+					{
+						if(getCargoStatus(ships[i]))return CM_PLACE_CARGO; // Ship here, no cargo
+						else break; // Ship here, has cargo
+					}
 				}
 			}
 			else ; // No more ships in game besides me
@@ -416,7 +577,7 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 	}
 	else ; // Cargo was placed by the crane in the last round, so no need to place it again this round
 
-	if(Xfirst)return selectCommandXFirst(x, y);
+	if(x_first)return selectCommandXFirst(x, y);
 	else return selectCommandYFirst(x, y);
 }
 
@@ -459,9 +620,7 @@ static uint8_t selectCommandYFirst(uint8_t x, uint8_t y)
  **********************************************************************************************/
 
 // Returns distance to crane, zero distance means crane is at location (x; y).
-// If crane location data is unavailable for more than 1000 kernel ticks, returns 
-// last available crane location. Availability here is related to cloc_mutex.
-// This function can block for 1000 kernel ticks.
+// This function can block.
 uint16_t distToCrane(uint8_t x, uint8_t y)
 {
 	static uint16_t dist;
