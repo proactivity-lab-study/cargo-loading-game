@@ -83,14 +83,14 @@ static uint32_t randomNumber(uint32_t rndL, uint32_t rndH);
  *	Initialise module
  **********************************************************************************************/
 
-void init_game()
+static void initGame()
 {
 	srand(osKernelGetTickCount()); // Initialise random number generator
-	init_crane_loc(); // Crane location
+	initCraneLoc(); // Crane location
 	global_load_deadline = osKernelGetTickCount() + (DURATION_OF_GAME - 1) * osKernelGetTickFreq();
 }
 
-void init_system(comms_layer_t* radio, am_addr_t my_addr)
+void initSystem(comms_layer_t* radio, am_addr_t my_addr)
 {
 	uint8_t i=0;
 
@@ -116,7 +116,6 @@ void init_system(comms_layer_t* radio, am_addr_t my_addr)
 	snd_buf_qID = osMessageQueueNew(9, sizeof(query_response_buf_t), NULL);	// For response messages
 
 	snd_event_id = osEventFlagsNew(NULL); // Using one event flag for two send threads. Possible starvation??
-
 	osEventFlagsSet(snd_event_id, 0x00000001U); // Sets send threads to ready-to-send state
 
 	osThreadNew(incomingMsgHandler, NULL, NULL);	// Handles incoming messages and responses to
@@ -128,13 +127,13 @@ void init_system(comms_layer_t* radio, am_addr_t my_addr)
  *	Message receiving
  **********************************************************************************************/
 
-void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* user)
+void systemReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* user)
 {
 	// First message that is received triggers random number generator init
 	// and subsequently starts the game
 	if(first_msg)
 	{
-		init_game();
+		initGame();
 		first_msg = false;
 	}
 

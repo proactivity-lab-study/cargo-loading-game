@@ -88,8 +88,8 @@ static comms_layer_t* radio_setup (am_addr_t node_addr)
         osDelay(1);
     }
 
-    comms_register_recv(radio, &rcvr, crane_receive_message, NULL, AMID_CRANECOMMUNICATION);
-	comms_register_recv(radio, &rcvr2, system_receive_message, NULL, AMID_SYSTEMCOMMUNICATION);
+    comms_register_recv(radio, &rcvr, craneReceiveMessage, NULL, AMID_CRANECOMMUNICATION);
+	comms_register_recv(radio, &rcvr2, systemReceiveMessage, NULL, AMID_SYSTEMCOMMUNICATION);
 
     debug1("radio rdy");
     return radio;
@@ -121,8 +121,8 @@ void setup_loop (void * arg)
         for (;;); // Panic
     }
 
-	init_crane(radio, node_addr);
-	init_system(radio, node_addr);
+	initCrane(radio, node_addr);
+	initSystem(radio, node_addr);
 
     // Loop forever
     for (;;)

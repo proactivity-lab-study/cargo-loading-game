@@ -89,9 +89,9 @@ static comms_layer_t* radio_setup (am_addr_t node_addr)
         osDelay(1);
     }
 
-    comms_register_recv(radio, &rcvr, crane_receive_message, NULL, AMID_CRANECOMMUNICATION);
-	comms_register_recv(radio, &rcvr2, system_receive_message, NULL, AMID_SYSTEMCOMMUNICATION);
-    comms_register_recv(radio, &rcvr3, ship2ship_receive_message, NULL, AMID_SHIPCOMMUNICATION);
+    comms_register_recv(radio, &rcvr, craneReceiveMessage, NULL, AMID_CRANECOMMUNICATION);
+	comms_register_recv(radio, &rcvr2, systemReceiveMessage, NULL, AMID_SYSTEMCOMMUNICATION);
+    comms_register_recv(radio, &rcvr3, ship2ShipReceiveMessage, NULL, AMID_SHIPCOMMUNICATION);
     debug1("radio rdy");
     return radio;
 }
@@ -122,9 +122,9 @@ void setup_loop (void * arg)
         for (;;); // Panic
     }
 
-	init_system_status(radio, node_addr); // This should be first
-	init_crane_control(radio, node_addr); // This should be second
-	init_ship_strategy(radio, node_addr);
+	initSystemStatus(radio, node_addr); // This should be first
+	initCraneControl(radio, node_addr); // This should be second
+	initShipStrategy(radio, node_addr);
 
     // Loop forever
     for (;;)

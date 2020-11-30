@@ -24,13 +24,13 @@ enum {
  *	Initialise module
  **********************************************************************************************/
 
-void init_crane_control(comms_layer_t* radio, am_addr_t addr);
+void initCraneControl(comms_layer_t* radio, am_addr_t addr);
 
 /**********************************************************************************************
  *	Message receiving
  **********************************************************************************************/
 
-void crane_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* user);
+void craneReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* user);
 
 /**********************************************************************************************
  *	Crane command and tactics functions

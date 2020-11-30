@@ -56,20 +56,20 @@ static void locationMsgHandler(void *args);
 static void commandMsgHandler(void *args);
 static void sendCommandMsg(void *args);
 
-static uint8_t get_empty_slot();
+static uint8_t getEmptySlot();
 static uint8_t goToDestination(uint8_t x, uint8_t y);
 static uint8_t parrotShip(am_addr_t sID);
 static uint8_t selectPopular();
 static uint8_t selectCommand(uint8_t x, uint8_t y);
 static uint8_t selectCommandXFirst(uint8_t x, uint8_t y);
 static uint8_t selectCommandYFirst(uint8_t x, uint8_t y);
-static void clear_cmds_buf();
+static void clearCmdsBuf();
 
 /**********************************************************************************************
  *	Initialise module
  **********************************************************************************************/
 
-void init_crane_control(comms_layer_t* radio, am_addr_t addr)
+void initCraneControl(comms_layer_t* radio, am_addr_t addr)
 {
 	const osMutexAttr_t cloc_Mutex_attr = { .attr_bits = osMutexRecursive }; // Allow nesting of this mutex
 
@@ -82,7 +82,7 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 	lmsg_qID = osMessageQueueNew(3, sizeof(crane_location_msg_t), NULL);
 	
 	// Initialise ships' commands buffer
-	clear_cmds_buf();
+	clearCmdsBuf();
 
 	cradio = radio;
 	my_address = addr;
@@ -206,7 +206,7 @@ static void craneMainLoop(void *args)
  *	Message receiving
  **********************************************************************************************/
 
-void crane_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* user)
+void craneReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* user)
 {
 	uint8_t pl_len = comms_get_payload_length(comms, msg);
 	am_addr_t crane_addr;
@@ -267,7 +267,7 @@ static void locationMsgHandler(void *args)
 				if(saddr != 0)markCargo(saddr);
 			}
 
-			clear_cmds_buf(); // Clear contents of cmds buffer
+			clearCmdsBuf(); // Clear contents of cmds buffer
 		}
 	}
 }
@@ -294,7 +294,7 @@ static void commandMsgHandler(void *args)
 			}
 			if(i>=MAX_SHIPS) // Add ship and command if room
 			{
-				i = get_empty_slot();
+				i = getEmptySlot();
 				if(i<MAX_SHIPS)
 				{
 					cmds[i].ship_addr = ntoh16(packet.senderAddr);
@@ -311,7 +311,7 @@ static void commandMsgHandler(void *args)
  *	Message sending
  **********************************************************************************************/
 
-static void radio_send_done(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
+static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
     logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-cc %u", result);
     osThreadFlagsSet(snd_task_id, 0x00000001U);
@@ -344,8 +344,8 @@ static void sendCommandMsg(void *args)
 	    //comms_am_set_source(cradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
 	    comms_set_payload_length(cradio, &m_msg, sizeof(crane_command_msg_t));
 
-	    comms_error_t result = comms_send(cradio, &m_msg, radio_send_done, NULL);
-	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd-cc %u", result);
+	    comms_error_t result = comms_send(cradio, &m_msg, radioSendDone, NULL);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
 	}
 }
 
@@ -564,7 +564,7 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 					{
 						stat = getCargoStatus(ships[i]);
 						if(stat != 0)return CM_PLACE_CARGO; // Ship here, no cargo
-						else break; // Ship here, has cargo, so don't place
+						else break; // Ship here, has cargo
 					}
 					else ;
 				}
@@ -632,7 +632,7 @@ uint16_t distToCrane(uint8_t x, uint8_t y)
 	return dist;
 }
 
-static void clear_cmds_buf()
+static void clearCmdsBuf()
 {
 	uint8_t i;
 	while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
@@ -646,7 +646,7 @@ static void clear_cmds_buf()
 
 //TODO mutex protection if more than commandMsgHandler is calling this function
 // Mutex nesting is allowed, but 'release' must be called the same number of times as 'acquire'.
-static uint8_t get_empty_slot() 
+static uint8_t getEmptySlot() 
 {
 	uint8_t k;
 	for(k=0;k<MAX_SHIPS;k++)if(cmds[k].ship_addr == 0)break;

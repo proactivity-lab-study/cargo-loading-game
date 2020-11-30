@@ -15,13 +15,13 @@
  *	Initialise module
  **********************************************************************************************/
 
-void init_system_status(comms_layer_t* radio, am_addr_t addr);
+void initSystemStatus(comms_layer_t* radio, am_addr_t addr);
 
 /**********************************************************************************************
  *	Message receiving
  **********************************************************************************************/
 
-void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* user);
+void systemReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* user);
 
 /**********************************************************************************************
  *	Utility functions

@@ -44,8 +44,8 @@ static am_addr_t my_address;
 
 bool no_coop = false;
 
-static void start_coop(void *args);
-static void send_msg(void *args);
+static void startCoop(void *args);
+static void sendMsg(void *args);
 am_addr_t get_nearest_n();
 static uint16_t calcDistance(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2);
 //osEventFlagsId_t evt_id;
@@ -54,7 +54,7 @@ static uint16_t calcDistance(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2);
  *	Initialise module
  **********************************************************************************************/
 
-void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
+void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 {
 	loc_bundle_t loc;
 
@@ -68,8 +68,8 @@ void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 	loc.x = loc.y = 0;
 	//setCraneTactics(cc_do_nothing, 0, loc);
 	
-	osThreadNew(start_coop, NULL, NULL); // Empty thread
-	snd_task_id = osThreadNew(send_msg, NULL, NULL); // Sends messages
+	osThreadNew(startCoop, NULL, NULL); // Empty thread
+	snd_task_id = osThreadNew(sendMsg, NULL, NULL); // Sends messages
 	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
 }
 
@@ -77,7 +77,7 @@ void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
  *	 Module threads
  *********************************************************************************************/
 
-static void start_coop(void *args)
+static void startCoop(void *args)
 {
 	coop_msg_t cmsg;
 	am_addr_t dest;
@@ -101,7 +101,7 @@ static void start_coop(void *args)
  *	Message receiving
  **********************************************************************************************/
 
-void ship2ship_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* user)
+void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* user)
 {
 	uint8_t pl_len = comms_get_payload_length(comms, msg);
 	uint8_t * rmsg = (uint8_t *) comms_get_payload(comms, msg, pl_len);
@@ -157,13 +157,13 @@ void ship2ship_receive_message(comms_layer_t* comms, const comms_msg_t* msg, voi
  *	Message sending
  **********************************************************************************************/
 
-static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
+static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
     logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-ss %u", result);
     osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
-static void send_msg(void *args)
+static void sendMsg(void *args)
 {
 	uint8_t packet[15], len;
 	coop_msg_ans_t *acoop_p;
@@ -224,8 +224,8 @@ static void send_msg(void *args)
 	    //comms_am_set_source(sradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
 	    comms_set_payload_length(sradio, &m_msg, len);
 
-	    comms_error_t result = comms_send(sradio, &m_msg, radio_send_done, NULL);
-	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd-ss %u", result);
+	    comms_error_t result = comms_send(sradio, &m_msg, radioSendDone, NULL);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
 	}
 }
 
