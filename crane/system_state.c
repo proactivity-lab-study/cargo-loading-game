@@ -83,14 +83,14 @@ static uint32_t randomNumber(uint32_t rndL, uint32_t rndH);
  *	Initialise module
  **********************************************************************************************/
 
-void init_game()
+static void initGame()
 {
 	srand(osKernelGetTickCount()); // Initialise random number generator
-	init_crane_loc(); // Crane location
+	initCraneLoc(); // Crane location
 	global_load_deadline = osKernelGetTickCount() + (DURATION_OF_GAME - 1) * osKernelGetTickFreq();
 }
 
-void init_system(comms_layer_t* radio, am_addr_t my_addr)
+void initSystem(comms_layer_t* radio, am_addr_t my_addr)
 {
 	uint8_t i=0;
 
@@ -127,13 +127,13 @@ void init_system(comms_layer_t* radio, am_addr_t my_addr)
  *	Message receiving
  **********************************************************************************************/
 
-void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* user)
+void systemReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* user)
 {
 	// First message that is received triggers random number generator init
 	// and subsequently starts the game
 	if(first_msg)
 	{
-		init_game();
+		initGame();
 		first_msg = false;
 	}
 
@@ -199,7 +199,7 @@ static void incomingMsgHandler(void *arg)
 			case SHIP_QMSG:
 				info1("Ship qry %lu %lu", ntoh16(packet.senderAddr), ntoh16(packet.shipAddr));
 				while(osMutexAcquire(sdb_mutex, 1000) != osOK);
-				ndx = getIndex(ntoh16(packet.senderAddr));
+				ndx = getIndex(ntoh16(packet.shipAddr));
 				rpacket.messageID = SHIP_QRMSG;
 				rpacket.senderAddr = ntoh16(packet.senderAddr); // Piggybacking destination address here
 				rpacket.shipAddr = ship_db[ndx].shipAddr;

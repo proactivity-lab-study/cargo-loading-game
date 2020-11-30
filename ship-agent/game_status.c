@@ -40,7 +40,7 @@ uint32_t global_time_left; // Protected by sddb_mutex
 static osMutexId_t sddb_mutex, asdb_mutex;
 static osMessageQueueId_t snd_msg_qID;
 static osThreadId_t wmsg_thread, snd_task_id;
-
+static osEventFlagsId_t evt_id;
 
 static comms_msg_t m_msg;
 static comms_layer_t* sradio;
@@ -48,26 +48,22 @@ static am_addr_t my_address;
 static am_addr_t system_address = AM_BROADCAST_ADDR; // Use actual system address if possible
 static bool first_msg = true; // Used to get actual system address once
 
-static bool get_all_ships_data_in_progress = false; // Protected by asdb_mutex
+static void welcomeMsgLoop(void *args);
+static void sendMsgLoop(void *args);
+static void getAllShipsData(void *args);
+static void getAllShipsIngame(void *args);
 
-static void welcome_msg_loop(void *args);
-static void send_msg_loop(void *args);
-static void get_all_ships_data(void *args);
-static void get_all_ships_in_game(void *args);
-
-static osEventFlagsId_t evt_id;
-
-static uint8_t get_empty_slot();
-static uint8_t get_index(am_addr_t addr);
-static void add_ship(query_response_msg_t* ship);
-static void add_ship_addr(am_addr_t addr);
+static uint8_t getEmptySlot();
+static uint8_t getIndex(am_addr_t addr);
+static void addShip(query_response_msg_t* ship);
+static void addShipAddr(am_addr_t addr);
 
 
 /**********************************************************************************************
  *	Initialise module
  **********************************************************************************************/
 
-void init_system_status(comms_layer_t* radio, am_addr_t addr)
+void initSystemStatus(comms_layer_t* radio, am_addr_t addr)
 {
 	uint8_t i;
 	const osMutexAttr_t sddb_Mutex_attr = { .attr_bits = osMutexRecursive }; // Allow nesting of this mutex
@@ -75,7 +71,7 @@ void init_system_status(comms_layer_t* radio, am_addr_t addr)
 	sddb_mutex = osMutexNew(&sddb_Mutex_attr);	// Protects ships' crane command database
 	asdb_mutex = osMutexNew(NULL);				// Protects current crane location values
 
-	evt_id = osEventFlagsNew(NULL);	// Tells 'get_all_ships_data' task to quiery for the next ship
+	evt_id = osEventFlagsNew(NULL);	// Tells 'getAllShipsData' task to quiery for the next ship
 
 	snd_msg_qID = osMessageQueueNew(9, sizeof(query_msg_t), NULL);
 	
@@ -102,18 +98,18 @@ void init_system_status(comms_layer_t* radio, am_addr_t addr)
 	}
 	osMutexRelease(asdb_mutex);
 
-	wmsg_thread = osThreadNew(welcome_msg_loop, NULL, NULL); // Sends welcome message and then stops
-	snd_task_id = osThreadNew(send_msg_loop, NULL, NULL); // Sends quiery messages
+	wmsg_thread = osThreadNew(welcomeMsgLoop, NULL, NULL); // Sends welcome message and then stops
+	snd_task_id = osThreadNew(sendMsgLoop, NULL, NULL); // Sends quiery messages
 	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
-	osThreadNew(get_all_ships_data, NULL, NULL);
-	osThreadNew(get_all_ships_in_game, NULL, NULL); // Sends AS_QMSG message	
+	osThreadNew(getAllShipsData, NULL, NULL);
+	osThreadNew(getAllShipsIngame, NULL, NULL); // Sends AS_QMSG message	
 }
 
 /**********************************************************************************************
  *	 Module threads
  *********************************************************************************************/
 
-static void get_all_ships_in_game(void *args)
+static void getAllShipsIngame(void *args)
 {
 	query_msg_t packet;
 	
@@ -126,7 +122,7 @@ static void get_all_ships_in_game(void *args)
 	}
 }
 
-static void get_all_ships_data(void *args)
+static void getAllShipsData(void *args)
 {
 	uint8_t i;
 	query_msg_t packet;
@@ -143,26 +139,20 @@ static void get_all_ships_data(void *args)
 				packet.senderAddr = my_address;
 				packet.shipAddr = ship_addr[i];
 				ship_addr[i] = 0;
-				osMutexRelease(asdb_mutex);
 				osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
-				break;
 			}
 		}
-		if(i >= MAX_SHIPS)
-		{
-			get_all_ships_data_in_progress = false; // Done
-			osMutexRelease(asdb_mutex);
-		}
+		osMutexRelease(asdb_mutex);
 	}
 }
 
-static void welcome_msg_loop(void *args)
+static void welcomeMsgLoop(void *args)
 {
 	query_msg_t packet;
 	for(;;)
 	{
 		while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-		if(get_index(my_address) >= MAX_SHIPS)
+		if(getIndex(my_address) >= MAX_SHIPS)
 		{
 			osMutexRelease(sddb_mutex);
 			packet.messageID = WELCOME_MSG;
@@ -185,7 +175,7 @@ static void welcome_msg_loop(void *args)
  *	Message receiving
  **********************************************************************************************/
 
-void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* user)
+void systemReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* user)
 {
 	uint8_t i;
 	am_addr_t dest;
@@ -198,11 +188,15 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 	//TODO maybe put this all in a separate task, to make this interrupt handler faster
 	switch(rmsg[0])
 	{
-		// New ship, maybe do something? trigger reminder to ask for new ship?
+		// New ship, trigger make ship quiery
 		case WELCOME_MSG :
-		break;
+			packet2.messageID = SHIP_QMSG;
+			packet2.senderAddr = my_address;
+			packet2.shipAddr = comms_am_get_source(comms, msg);
+			osMessageQueuePut(snd_msg_qID, &packet2, 0, osWaitForever);
+			break;
 
-		// Query messages, nothing to do
+		// Query messages, nothing to do, we should not get these
 		case GTIME_QMSG :
 		case SHIP_QMSG :
 		case AS_QMSG :
@@ -225,15 +219,15 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 				system_address = comms_am_get_source(comms, msg);
 				first_msg = false;
 			}
-			info1("Rcv wlcme");
+
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-			add_ship(packet);
+			addShip(packet);
 			osMutexRelease(sddb_mutex);
 			
 			dest = comms_am_get_destination(comms, msg);
 			if(dest == my_address)
 			{
-				info1("My loc %u %u", packet->x_coordinate, packet->y_coordinate);
+				info1("Rcv wlcm my loc %u %u", packet->x_coordinate, packet->y_coordinate);
 				packet2.messageID = AS_QMSG;
 				packet2.senderAddr = my_address;
 				osMessageQueuePut(snd_msg_qID, &packet2, 0, 1000);
@@ -242,17 +236,10 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 			case SHIP_QRMSG :
 			packet = (query_response_msg_t *) comms_get_payload(comms, msg, sizeof(query_response_msg_t));
 			
-			info1("Rcv ship");
-			if(ntoh16(packet->shipAddr) == my_address)info1("My loc %u %u", packet->x_coordinate, packet->y_coordinate);
+			info1("Rcv ship %u loc %u %u", ntoh16(packet->shipAddr), packet->x_coordinate, packet->y_coordinate);
 			while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-			add_ship(packet);
+			addShip(packet);
 			osMutexRelease(sddb_mutex);
-
-			// Trigger get_all_ships_data() task 
-			dest = comms_am_get_destination(comms, msg);
-			while(osMutexAcquire(asdb_mutex, 1000) != osOK);
-			if(get_all_ships_data_in_progress && dest == my_address)osEventFlagsSet(evt_id, 0x00000001U);
-			osMutexRelease(asdb_mutex);
 
 			break;
 
@@ -264,11 +251,10 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
 				while(osMutexAcquire(asdb_mutex, 1000) != osOK);
 				for(i=0;i<bpacket->len;i++)
 				{
-					add_ship_addr(ntoh16(bpacket->ships[i]));
+					addShipAddr(ntoh16(bpacket->ships[i]));
 				}
-				get_all_ships_data_in_progress = true;
 				osMutexRelease(asdb_mutex);
-				osEventFlagsSet(evt_id, 0x00000001U); // Trigger get_all_ships_data() task 
+				osEventFlagsSet(evt_id, 0x00000001U); // Trigger getAllShipsData() task 
 			}
 			break;
 
@@ -292,13 +278,13 @@ void system_receive_message(comms_layer_t* comms, const comms_msg_t* msg, void* 
  *	Message sending
  **********************************************************************************************/
 
-static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
+static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
     logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
 	osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
-static void send_msg_loop(void *args)
+static void sendMsgLoop(void *args)
 {
 	query_msg_t packet;
 	for(;;)
@@ -323,7 +309,7 @@ static void send_msg_loop(void *args)
 	    //comms_am_set_source(sradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
 	    comms_set_payload_length(sradio, &m_msg, sizeof(query_msg_t));
 
-	    comms_error_t result = comms_send(sradio, &m_msg, radio_send_done, NULL);
+	    comms_error_t result = comms_send(sradio, &m_msg, radioSendDone, NULL);
 	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
 	}
 }
@@ -341,7 +327,7 @@ loc_bundle_t getShipLocation(am_addr_t ship_addr)
 	
 	sloc.x = sloc.y = 0;
 	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
-	ndx = get_index(ship_addr);
+	ndx = getIndex(ship_addr);
 	if(ndx < MAX_SHIPS)
 	{
 		sloc.x = ships[ndx].x_coordinate;
@@ -421,7 +407,7 @@ uint8_t getCargoStatus(am_addr_t ship_addr)
 }
 
 
-static uint8_t get_empty_slot()
+static uint8_t getEmptySlot()
 {
 	uint8_t k;
 	for(k=0;k<MAX_SHIPS;k++)
@@ -431,7 +417,7 @@ static uint8_t get_empty_slot()
 	return k;
 }
 
-static uint8_t get_index(am_addr_t addr)
+static uint8_t getIndex(am_addr_t addr)
 {
 	uint8_t k;
 	for(k=0;k<MAX_SHIPS;k++)
@@ -441,7 +427,7 @@ static uint8_t get_index(am_addr_t addr)
 	return k;
 }
 
-static void add_ship_addr(am_addr_t addr)
+static void addShipAddr(am_addr_t addr)
 {
 	uint8_t i;
 
@@ -459,14 +445,14 @@ static void add_ship_addr(am_addr_t addr)
 }
 
 // Input argument is network packet, so use ntoh functions to read values
-static void add_ship(query_response_msg_t* ship)
+static void addShip(query_response_msg_t* ship)
 {
 	uint8_t ndx;
 	
-	ndx = get_index(ntoh16(ship->shipAddr));
+	ndx = getIndex(ntoh16(ship->shipAddr));
 	if(ndx >= MAX_SHIPS)
 	{
-		ndx = get_empty_slot();
+		ndx = getEmptySlot();
 		if(ndx < MAX_SHIPS)
 		{
 			ships[ndx].ship_in_game = true;

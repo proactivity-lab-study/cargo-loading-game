@@ -93,7 +93,7 @@ static uint32_t randomNumber(uint32_t rndL, uint32_t rndH);
  *	Initialise module
  **********************************************************************************************/
 
-void init_crane(comms_layer_t* radio, am_addr_t my_addr)
+void initCrane(comms_layer_t* radio, am_addr_t my_addr)
 {
 	uint8_t i;
 
@@ -124,7 +124,7 @@ void init_crane(comms_layer_t* radio, am_addr_t my_addr)
 	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
 }
 
-void init_crane_loc()
+void initCraneLoc()
 {
 	// Get crane start location
 
@@ -169,7 +169,7 @@ static void craneMainLoop(void *args)
  *	Message receiving
  **********************************************************************************************/
 
-void crane_receive_message (comms_layer_t* comms, const comms_msg_t* msg, void* user)
+void craneReceiveMessage (comms_layer_t* comms, const comms_msg_t* msg, void* user)
 {
 	if (comms_get_payload_length(comms, msg) >= sizeof(crane_command_msg_t))
     {
@@ -231,7 +231,7 @@ static void incomingMsgHandler(void *args)
  *	Message sending
  **********************************************************************************************/
 
-static void radio_send_done (comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
+static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
 	uint8_t i;
 
@@ -272,7 +272,7 @@ static void sendLocationMsg(void *args)
 	    //comms_am_set_source(cradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
 	    comms_set_payload_length(cradio, &m_msg, sizeof(crane_location_msg_t));
 
-	    comms_error_t result = comms_send(cradio, &m_msg, radio_send_done, NULL);
+	    comms_error_t result = comms_send(cradio, &m_msg, radioSendDone, NULL);
 	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
 	}
 }

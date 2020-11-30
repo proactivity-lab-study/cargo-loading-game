@@ -13,14 +13,14 @@
  *	Initialise module
  **********************************************************************************************/
 
-void init_crane(comms_layer_t* radio, am_addr_t my_addr);
-void init_crane_loc();
+void initCrane(comms_layer_t* radio, am_addr_t my_addr);
+void initCraneLoc();
 
 /**********************************************************************************************
  *	Message receiving
  **********************************************************************************************/
 
-void crane_receive_message (comms_layer_t* comms, const comms_msg_t* msg, void* user);
+void craneReceiveMessage (comms_layer_t* comms, const comms_msg_t* msg, void* user);
 
 /**********************************************************************************************
  *	Utility functions
