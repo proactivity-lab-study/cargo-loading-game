@@ -95,7 +95,7 @@ void init_crane_control(comms_layer_t* radio, am_addr_t addr)
 	osMutexRelease(cloc_mutex);
 
 	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
-	tactic = cc_to_location;
+	tactic = cc_to_address;
 	tactic_loc.x = tactic_loc.y = 0; // Most likely I don't have a location yet
 	tactic_addr = my_address;
 	osMutexRelease(cctt_mutex);
@@ -536,7 +536,7 @@ static uint8_t selectPopular()
 
 static uint8_t selectCommand(uint8_t x, uint8_t y)
 {
-	uint8_t len = 0, i;
+	uint8_t len = 0, i, stat;
 	bool x_first, placeCargo;
 	am_addr_t ships[MAX_SHIPS];
 	loc_bundle_t sloc;
@@ -562,9 +562,11 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 					// If there is a ship here, then only reasonable command is place cargo
 					if(distToCrane(sloc.x, sloc.y) == 0)
 					{
-						if(getCargoStatus(ships[i]))return CM_PLACE_CARGO; // Ship here, no cargo
-						else break; // Ship here, has cargo
+						stat = getCargoStatus(ships[i]);
+						if(stat != 0)return CM_PLACE_CARGO; // Ship here, no cargo
+						else break; // Ship here, has cargo, so don't place
 					}
+					else ;
 				}
 			}
 			else ; // No more ships in game besides me
@@ -581,7 +583,7 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 	else return selectCommandYFirst(x, y);
 }
 
-static uint8_t selectCommandXFirst(uint8_t x, uint8_t y)
+static uint8_t selectCommandYFirst(uint8_t x, uint8_t y)
 {
 	if(y > cloc.crane_y)return CM_UP;
 	else if(y < cloc.crane_y)return CM_DOWN;
@@ -598,7 +600,7 @@ static uint8_t selectCommandXFirst(uint8_t x, uint8_t y)
 	else return CM_PLACE_CARGO;
 }
 
-static uint8_t selectCommandYFirst(uint8_t x, uint8_t y)
+static uint8_t selectCommandXFirst(uint8_t x, uint8_t y)
 {
 	if(x > cloc.crane_x)return CM_RIGHT;
 	else if(x < cloc.crane_x)return CM_LEFT;

@@ -66,7 +66,7 @@ void init_ship_strategy(comms_layer_t* radio, am_addr_t addr)
 	setXFirst(true);
 	setAlwaysPlaceCargo(true);
 	loc.x = loc.y = 0;
-	setCraneTactics(cc_do_nothing, 0, loc);
+	//setCraneTactics(cc_do_nothing, 0, loc);
 	
 	osThreadNew(start_coop, NULL, NULL); // Empty thread
 	snd_task_id = osThreadNew(send_msg, NULL, NULL); // Sends messages
@@ -92,7 +92,7 @@ static void start_coop(void *args)
 			cmsg.senderAddr = my_address;
 			dest = get_nearest_n();
 			cmsg.destinationAddr = dest;
-			osMessageQueuePut(snd_msg_qID, &cmsg, 0, 0);
+			//if(dest != my_address)osMessageQueuePut(snd_msg_qID, &cmsg, 0, 0);
 		}
 	}
 }
@@ -142,6 +142,7 @@ void ship2ship_receive_message(comms_layer_t* comms, const comms_msg_t* msg, voi
 				if(ans->agreement)
 				{
 					//good, start coop
+					// Select closest to crane and send msg
 					info1("coop OK!");
 				}
 			}
@@ -232,6 +233,10 @@ static void send_msg(void *args)
  *	Utility functions
  **********************************************************************************************/
 
+// Selects ship closest to me
+// In case of tie, selects first one found
+// If no ships returns own address
+// TODO ship_in_game must be used
 am_addr_t get_nearest_n()
 {
 	am_addr_t ship_addresses[MAX_SHIPS], saddr;

@@ -111,8 +111,8 @@ void init_system(comms_layer_t* radio, am_addr_t my_addr)
 	sradio = radio;
 	my_address = my_addr;
 
-	rcv_msg_qID = osMessageQueueNew(9, sizeof(query_msg_t), NULL);	// For received messages
-	snd_msg_qID = osMessageQueueNew(9, sizeof(query_response_msg_t), NULL);	// For response messages
+	rcv_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(query_msg_t), NULL);	// For received messages
+	snd_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(query_response_msg_t), NULL);	// For response messages
 	snd_buf_qID = osMessageQueueNew(9, sizeof(query_response_buf_t), NULL);	// For response messages
 
 	snd_event_id = osEventFlagsNew(NULL); // Using one event flag for two send threads. Possible starvation??
@@ -200,7 +200,7 @@ static void incomingMsgHandler(void *arg)
 			case SHIP_QMSG:
 				info1("Ship qry %lu %lu", ntoh16(packet.senderAddr), ntoh16(packet.shipAddr));
 				while(osMutexAcquire(sdb_mutex, 1000) != osOK);
-				ndx = getIndex(ntoh16(packet.senderAddr));
+				ndx = getIndex(ntoh16(packet.shipAddr));
 				rpacket.messageID = SHIP_QRMSG;
 				rpacket.senderAddr = ntoh16(packet.senderAddr); // Piggybacking destination address here
 				rpacket.shipAddr = ship_db[ndx].shipAddr;
