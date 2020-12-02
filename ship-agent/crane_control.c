@@ -560,7 +560,7 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 				{
 					sloc = getShipLocation(ships[i]);
 					// If there is a ship here, then only reasonable command is place cargo
-					if(distToCrane(sloc.x, sloc.y) == 0)
+					if(distToCrane(sloc) == 0)
 					{
 						stat = getCargoStatus(ships[i]);
 						if(stat != 0)return CM_PLACE_CARGO; // Ship here, no cargo
