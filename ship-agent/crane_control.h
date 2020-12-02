@@ -79,6 +79,6 @@ uint8_t getCraneTactics(am_addr_t *ship_addr, loc_bundle_t *loc);
 
 // Returns distance to crane, zero distance means crane is at location (x; y).
 // This function can block.
-uint16_t distToCrane(uint8_t x, uint8_t y);
+uint16_t distToCrane(loc_bundle_t loc);
 
 #endif //CRANE_CONTROL_H_

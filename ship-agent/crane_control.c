@@ -560,7 +560,7 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 				{
 					sloc = getShipLocation(ships[i]);
 					// If there is a ship here, then only reasonable command is place cargo
-					if(distToCrane(sloc.x, sloc.y) == 0)
+					if(distToCrane(sloc) == 0)
 					{
 						stat = getCargoStatus(ships[i]);
 						if(stat != 0)return CM_PLACE_CARGO; // Ship here, no cargo
@@ -623,11 +623,11 @@ static uint8_t selectCommandXFirst(uint8_t x, uint8_t y)
 
 // Returns distance to crane, zero distance means crane is at location (x; y).
 // This function can block.
-uint16_t distToCrane(uint8_t x, uint8_t y)
+uint16_t distToCrane(loc_bundle_t loc)
 {
 	static uint16_t dist;
 	while(osMutexAcquire(cloc_mutex, 1000) != osOK);
-	dist = abs(cloc.crane_x - x) + abs(cloc.crane_y - y);
+	dist = abs(cloc.crane_x - loc.x) + abs(cloc.crane_y - loc.y);
 	osMutexRelease(cloc_mutex);
 	return dist;
 }
