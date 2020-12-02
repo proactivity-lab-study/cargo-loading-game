@@ -23,6 +23,7 @@
 
 #include "ship_strategy.h"
 #include "crane_control.h"
+#include "game_status.h"
 #include "clg_comm.h"
 #include "game_types.h"
 #include "game_status.h"
