@@ -23,6 +23,7 @@
 
 #include "ship_strategy.h"
 #include "crane_control.h"
+#include "game_status.h"
 #include "clg_comm.h"
 #include "game_types.h"
 
@@ -57,7 +58,8 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	setXFirst(true);
 	setAlwaysPlaceCargo(true);
 	loc.x = loc.y = 0;
-	setCraneTactics(cc_do_nothing, 0, loc);
+	//setCraneTactics(cc_do_nothing, 0, loc);
+	setCraneTactics(cc_to_address, my_address, getShipLocation(my_address));
 	
 	osThreadNew(notMuch, NULL, NULL); // Empty thread
 	snd_task_id = osThreadNew(sendMsg, NULL, NULL); // Sends messages
