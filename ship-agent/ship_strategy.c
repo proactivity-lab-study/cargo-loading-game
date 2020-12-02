@@ -3,7 +3,7 @@
  * TODO reminder to use hton and ntoh functions to assign variable values
  * 		larger than a byte in network messages!! 
  *
- * 
+ * TODO take into account cargo status of nearest neighbour
  * 
  *
  * 
@@ -107,9 +107,12 @@ static void startCoop(void *args)
 		dest = get_nearest_n();
 
 		while(osMutexAcquire(coop_mutex, 1000) != osOK);
-		coop_status = COOP_SEARCHING;
-		coop_partner = my_address;
-		coop_destination = my_address;
+		if(coop_status != COOP_ACTIVE) // TODO does this mess things up?
+		{
+			coop_status = COOP_SEARCHING;
+			coop_partner = my_address;
+			coop_destination = my_address;
+		}
 		if(coop_partner != dest) // If nearest neighbour has changed, send start cooperation message
 		{
 			info1("start snd coop");
@@ -387,10 +390,10 @@ static void sendMsg(void *args)
  *	Utility functions
  **********************************************************************************************/
 
-// Selects ship closest to me
-// In case of tie, selects first one found
-// If no ships returns own address
-// TODO ship_in_game must be used
+// Selects ship closest to me.
+// In case of tie, selects first one found.
+// If no ships returns own address.
+// Does not take into account cargo status of nearest ship.
 am_addr_t get_nearest_n()
 {
 	am_addr_t ship_addresses[MAX_SHIPS], saddr;
