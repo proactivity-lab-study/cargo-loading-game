@@ -248,7 +248,7 @@ static void incomingMsgHandler(void *arg)
  **********************************************************************************************/
 static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-st %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
 	osEventFlagsSet(snd_event_id, 0x00000001U);
 }
 
@@ -285,7 +285,7 @@ static void sendResponseMsg(void *arg)
 	    comms_set_payload_length(sradio, &msg, sizeof(query_response_msg_t));
 
 	    comms_error_t result = comms_send(sradio, &msg, radioSendDone, NULL);
-	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd-stm %u", result);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
 	}
 }
 
@@ -322,7 +322,7 @@ static void sendResponseBuf(void *arg)
 	    comms_set_payload_length(sradio, &msg, sizeof(query_response_buf_t));
 
 	    comms_error_t result = comms_send(sradio, &msg, radioSendDone, NULL);
-	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd-stb %u", result);
+	    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
 	}
 }
 

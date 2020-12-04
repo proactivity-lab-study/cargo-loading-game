@@ -313,7 +313,7 @@ static void commandMsgHandler(void *args)
 
 static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-cc %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
     osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
@@ -566,7 +566,6 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 						if(stat != 0)return CM_PLACE_CARGO; // Ship here, no cargo
 						else break; // Ship here, has cargo
 					}
-					else ;
 				}
 			}
 			else ; // No more ships in game besides me

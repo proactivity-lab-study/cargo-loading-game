@@ -280,7 +280,7 @@ void systemReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* us
 
 static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-gs %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
 	osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
