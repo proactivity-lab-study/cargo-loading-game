@@ -73,7 +73,7 @@ void initSystemStatus(comms_layer_t* radio, am_addr_t addr)
 
 	evt_id = osEventFlagsNew(NULL);	// Tells 'getAllShipsData' task to quiery for the next ship
 
-	snd_msg_qID = osMessageQueueNew(9, sizeof(query_msg_t), NULL);
+	snd_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(query_msg_t), NULL);
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	// This is the only write, so not going to protect it with mutex
