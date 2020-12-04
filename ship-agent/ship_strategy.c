@@ -50,7 +50,7 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 {
 	loc_bundle_t loc;
 
-	snd_msg_qID = osMessageQueueNew(9, sizeof(query_msg_t), NULL);
+	snd_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(query_msg_t), NULL);
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	// This is the only write, so not going to protect it with mutex
@@ -58,7 +58,6 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	setXFirst(true);
 	setAlwaysPlaceCargo(true);
 	loc.x = loc.y = 0;
-	//setCraneTactics(cc_do_nothing, 0, loc);
 	setCraneTactics(cc_to_address, my_address, getShipLocation(my_address));
 	
 	osThreadNew(notMuch, NULL, NULL); // Empty thread
@@ -89,7 +88,7 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 	uint8_t pl_len = comms_get_payload_length(comms, msg);
 	uint8_t * rmsg = (uint8_t *) comms_get_payload(comms, msg, pl_len);
 	
-	info1("rcvd");
+	info1("Rcvd");
 }
 
 /**********************************************************************************************
@@ -98,7 +97,7 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 
 static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_INFO1: LOG_WARN1, "snt %u", result);
     osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
