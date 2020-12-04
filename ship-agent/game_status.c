@@ -156,7 +156,7 @@ static void welcomeMsgLoop(void *args)
 			osMutexRelease(sddb_mutex);
 			packet.messageID = WELCOME_MSG;
 			packet.senderAddr = my_address;
-			info1("Snd wlcme");
+			info1("Send welcome");
 			osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
 		}
 		else 
@@ -280,7 +280,7 @@ void systemReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* us
 
 static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_INFO1: LOG_WARN1, "snt %u", result);
 	osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
@@ -379,6 +379,7 @@ uint8_t getAllShipsAddr(am_addr_t saddr[], uint8_t mlen)
 void markCargo(am_addr_t addr)
 {
 	uint8_t i;
+	static am_addr_t saddr;
 	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 	for(i=0;i<MAX_SHIPS;i++)if(ships[i].ship_addr == addr && ships[i].ship_in_game)
 	{
@@ -386,6 +387,7 @@ void markCargo(am_addr_t addr)
 		break;
 	}
 	osMutexRelease(sddb_mutex);
+	info1("Cargo placed %lu", saddr);
 }
 
 // Returns cargo status of ship 'ship_addr'. Possible return values:

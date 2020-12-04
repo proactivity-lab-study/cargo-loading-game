@@ -71,7 +71,8 @@ static uint16_t calcDistance(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2);
 void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 {
 	coop_mutex = osMutexNew(NULL); // Protects cooperation parameter values
-	snd_msg_qID = osMessageQueueNew(9, sizeof(coop_msg_t), NULL); 
+	snd_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(coop_msg_t), NULL);
+
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	// This is the only write, so not going to protect it with mutex
@@ -85,7 +86,7 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	coop_destination = my_address;
 	coop_status = COOP_SEARCHING; // This is just a place-holder
 	osMutexRelease(coop_mutex);
-	
+
 	osThreadNew(startCoop, NULL, NULL); // Send start cooperation thread
 	osThreadNew(manageCoop, NULL, NULL); // Manages active cooperation
 	snd_task_id = osThreadNew(sendMsg, NULL, NULL); // Sends messages
@@ -186,6 +187,7 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 {
 	uint8_t pl_len = comms_get_payload_length(comms, msg);
 	uint8_t * rmsg = (uint8_t *) comms_get_payload(comms, msg, pl_len);
+
 	uint16_t m_dist, n_dist;
 	uint8_t m_stat, n_stat;
 	am_addr_t nearest;
@@ -346,7 +348,7 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 
 static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt-ss %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_INFO1: LOG_WARN1, "snt %u", result);
     osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 

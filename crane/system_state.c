@@ -88,6 +88,7 @@ static void initGame()
 	srand(osKernelGetTickCount()); // Initialise random number generator
 	initCraneLoc(); // Crane location
 	global_load_deadline = osKernelGetTickCount() + (DURATION_OF_GAME - 1) * osKernelGetTickFreq();
+	info1("Game time: %lu s", (uint32_t)((global_load_deadline - osKernelGetTickCount()) / osKernelGetTickFreq()));
 }
 
 void initSystem(comms_layer_t* radio, am_addr_t my_addr)
@@ -113,7 +114,7 @@ void initSystem(comms_layer_t* radio, am_addr_t my_addr)
 
 	rcv_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(query_msg_t), NULL);	// For received messages
 	snd_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(query_response_msg_t), NULL);	// For response messages
-	snd_buf_qID = osMessageQueueNew(9, sizeof(query_response_buf_t), NULL);	// For response messages
+	snd_buf_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(query_response_buf_t), NULL);	// For response messages
 
 	snd_event_id = osEventFlagsNew(NULL); // Using one event flag for two send threads. Possible starvation??
 	osEventFlagsSet(snd_event_id, 0x00000001U); // Sets send threads to ready-to-send state
@@ -142,10 +143,10 @@ void systemReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* us
 	    query_msg_t * packet = (query_msg_t*)comms_get_payload(comms, msg, sizeof(query_msg_t));
 		info1("Rcv qry");		
 		osStatus_t err = osMessageQueuePut(rcv_msg_qID, packet, 0, 0);
-		if(err == osOK)info1("rc query");
-		else warn1("msgq err");
+		if(err == osOK)debug1("rc query");
+		else debug1("msgq err");
 	}
-	else warn1("rcv size %d", (unsigned int)comms_get_payload_length(comms, msg));
+	else debug1("rcv size %d", (unsigned int)comms_get_payload_length(comms, msg));
 }
 
 static void incomingMsgHandler(void *arg)
@@ -169,7 +170,7 @@ static void incomingMsgHandler(void *arg)
 				}
 				else 
 				{
-					info1("New ship %lu", ntoh16(packet.senderAddr));
+					info1("New ship %lu %u %u %u %lu", (uint16_t) ship_db[ndx].shipAddr, ship_db[ndx].x_coordinate, ship_db[ndx].y_coordinate, (uint8_t) ship_db[ndx].isCargoLoaded, (uint16_t)((ship_db[ndx].ltime - osKernelGetTickCount()) / osKernelGetTickFreq()));
 
 					rpacket.messageID = WELCOME_RMSG;
 					rpacket.senderAddr = ship_db[ndx].shipAddr; // Piggybacking destination address here

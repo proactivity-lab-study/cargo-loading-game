@@ -19,8 +19,6 @@
  * based on these IDs and crane module only receives crane
  * messages and system module only receives system messages.
  * 
- * TODO clean up logging
- * 
  * Copyright Thinnect Inc. 2019
  * Copyright to modifications Proactivity Lab 2020
  * 
@@ -64,7 +62,7 @@ INCBIN(Header, "header.bin");
 
 static void radio_start_done (comms_layer_t * comms, comms_status_t status, void * user)
 {
-    debug("radio started %d", status);
+    debug1("Radio started %d", status);
 }
 
 // Perform basic radio setup
@@ -91,7 +89,7 @@ static comms_layer_t* radio_setup (am_addr_t node_addr)
     comms_register_recv(radio, &rcvr, craneReceiveMessage, NULL, AMID_CRANECOMMUNICATION);
 	comms_register_recv(radio, &rcvr2, systemReceiveMessage, NULL, AMID_SYSTEMCOMMUNICATION);
 
-    debug1("radio rdy");
+    debug1("Radio rdy");
     return radio;
 }
 
@@ -110,14 +108,14 @@ void setup_loop (void * arg)
     }
     else
     {
-        warn1("ADDR:%"PRIX16, node_addr); // Falling back to default addr
+        debug1("ADDR:%"PRIX16, node_addr); // Falling back to default addr
     }
 
     // Initialize radio
     comms_layer_t* radio = radio_setup(node_addr);
     if (NULL == radio)
     {
-        err1("radio");
+        debug1("Radio error");
         for (;;); // Panic
     }
 
@@ -128,7 +126,7 @@ void setup_loop (void * arg)
     for (;;)
     {
         osDelay(60*osKernelGetTickFreq()); // 60 seconds
-		info("HB"); // Heartbeat
+		info1("HB"); // Heartbeat
     }
 }
 
@@ -172,7 +170,7 @@ int main ()
     }
     else
     {
-        err1("!osKernelReady");
+        debug1("!osKernelReady");
     }
 
 	// This is never reached

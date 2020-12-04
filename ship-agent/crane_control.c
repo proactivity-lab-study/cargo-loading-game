@@ -77,9 +77,9 @@ void initCraneControl(comms_layer_t* radio, am_addr_t addr)
 	cloc_mutex = osMutexNew(&cloc_Mutex_attr);	// Protects current crane location values
 	cctt_mutex = osMutexNew(NULL);				// Protects tactics related variables
 	
-	smsg_qID = osMessageQueueNew(9, sizeof(crane_command_msg_t), NULL); // Send queue
-	cmsg_qID = osMessageQueueNew(9, sizeof(crane_command_msg_t), NULL); // Receive queue
-	lmsg_qID = osMessageQueueNew(3, sizeof(crane_location_msg_t), NULL);
+	smsg_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(crane_command_msg_t), NULL); // Send queue
+	cmsg_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(crane_command_msg_t), NULL); // Receive queue
+	lmsg_qID = osMessageQueueNew(6, sizeof(crane_location_msg_t), NULL);
 	
 	// Initialise ships' commands buffer
 	clearCmdsBuf();
@@ -113,7 +113,7 @@ void initCraneControl(comms_layer_t* radio, am_addr_t addr)
 
 static void craneMainLoop(void *args)
 {
-	uint8_t cmd = CM_NOTHING_TO_DO;
+	static uint8_t cmd = CM_NOTHING_TO_DO;
 	uint8_t  stat, tt;
 	uint32_t time_left, ticks;
 	am_addr_t addr;
@@ -188,12 +188,12 @@ static void craneMainLoop(void *args)
 					break;
 			}
 
+			info1("Cmnd sel %u", cmd);
 			if(cmd != CM_NOTHING_TO_DO)
 			{
 				packet.messageID = CRANE_COMMAND_MSG;
 				packet.senderAddr = my_address;
 				packet.cmd = cmd;
-				info1("Cmnd sel %u", cmd);
 				osMessageQueuePut(smsg_qID, &packet, 0, 0);
 			}
 			else ; // Nothing to do
@@ -216,8 +216,8 @@ void craneReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* use
         crane_command_msg_t * packet = (crane_command_msg_t*)comms_get_payload(comms, msg, sizeof(crane_command_msg_t));
         debug1("rcv-c");
         osStatus_t err = osMessageQueuePut(cmsg_qID, packet, 0, 0);
-		if(err == osOK)info1("command rcvd");
-		else warn1("cmsgq err");
+		if(err == osOK)debug1("command rcvd");
+		else debug1("cmsgq err");
     }
     else if (pl_len == sizeof(crane_location_msg_t))
 	{
@@ -233,10 +233,10 @@ void craneReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* use
 		}
 
         osStatus_t err = osMessageQueuePut(lmsg_qID, packet, 0, 0);
-		if(err == osOK)info1("crane location rcvd");
-		else warn1("lmsgq err");
+		if(err == osOK)debug1("crane location rcvd");
+		else debug1("lmsgq err");
 	}
-	else warn1("rcv size %d", (unsigned int)comms_get_payload_length(comms, msg));
+	else debug1("rcv size %d", (unsigned int)comms_get_payload_length(comms, msg));
 }
 
 static void locationMsgHandler(void *args)
@@ -250,7 +250,7 @@ static void locationMsgHandler(void *args)
 		if(packet.messageID == CRANE_LOCATION_MSG && ntoh16(packet.senderAddr) == CRANE_ADDR)
 		{
 			lastCraneEventTime = osKernelGetTickCount();
-			info1("Crane mov %lu %lu %u", packet.x_coordinate, packet.y_coordinate, packet.cargoPlaced);
+			info1("Crane mov %u %u %u", packet.x_coordinate, packet.y_coordinate, packet.cargoPlaced);
 
 			while(osMutexAcquire(cloc_mutex, 1000) != osOK);
 			cloc.crane_x = packet.x_coordinate;
@@ -283,6 +283,7 @@ static void commandMsgHandler(void *args)
 		osMessageQueueGet(cmsg_qID, &packet, NULL, osWaitForever);
 		if(packet.messageID == CRANE_COMMAND_MSG)
 		{
+			info1("Cmnd %lu", ntoh16(packet.senderAddr));
 			while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
 			for(i=0;i<MAX_SHIPS;i++)
 			{
@@ -313,7 +314,7 @@ static void commandMsgHandler(void *args)
 
 static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_INFO1: LOG_WARN1, "Cmnd sent %u", result);
     osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
@@ -358,9 +359,11 @@ static void sendCommandMsg(void *args)
 // This function can block.
 void setXFirst(bool val)
 {
+	static bool v;
 	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
 	Xfirst = val;
 	osMutexRelease(cctt_mutex);
+	info1("X first %u", (uint8_t) v);
 }
 
 // Returns whether crane is commanded to move along x coordinate first or along y coordinate first.
@@ -384,9 +387,11 @@ bool getXFirst()
 // This function can block.
 void setAlwaysPlaceCargo(bool val)
 {
+	static bool v;
 	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
 	alwaysPlaceCargo = val;
 	osMutexRelease(cctt_mutex);
+	info1("Always place cargo %u", (uint8_t) v);
 }
 
 // Returns cargo placement tactics choice. 
@@ -412,11 +417,14 @@ bool getAlwaysPlaceCargo()
 // This function can block.
 void setCraneTactics(uint8_t tt, am_addr_t ship_addr, loc_bundle_t loc)
 {
+	static uint8_t tact;
+	tact = tt;
 	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
 	tactic = tt;
 	tactic_addr = ship_addr;
 	tactic_loc = loc;
 	osMutexRelease(cctt_mutex);
+	info1("Crane tactics %u", tact);
 }
 
 // Returns current tactical choise.
