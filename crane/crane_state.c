@@ -151,7 +151,7 @@ static void craneMainLoop(void *args)
 		wcmd = getWinningCmd();
 
 		while(osMutexAcquire(cloc_mutex, 1000) != osOK);
-		info("wcmd %u",wcmd);
+		info("Winning cmd %u", wcmd);
 		if(wcmd > 0 && wcmd < CM_CURRENT_LOCATION)doCommand(wcmd);
 		sloc.messageID = CRANE_LOCATION_MSG;
 		sloc.senderAddr = my_address;
@@ -161,7 +161,7 @@ static void craneMainLoop(void *args)
 		osMessageQueuePut(smsg_qID, &sloc, 0, 0);	
 		osMutexRelease(cloc_mutex);
 		
-		info1("Location %u %u %u", sloc.x_coordinate, sloc.y_coordinate, sloc.cargoPlaced);
+		info1("Crane %u %u %u", sloc.x_coordinate, sloc.y_coordinate, sloc.cargoPlaced);
 	}
 }
 
@@ -171,15 +171,15 @@ static void craneMainLoop(void *args)
 
 void craneReceiveMessage (comms_layer_t* comms, const comms_msg_t* msg, void* user)
 {
-	if (comms_get_payload_length(comms, msg) >= sizeof(crane_command_msg_t))
+	if (comms_get_payload_length(comms, msg) == sizeof(crane_command_msg_t))
     {
         crane_command_msg_t * packet = (crane_command_msg_t*)comms_get_payload(comms, msg, sizeof(crane_command_msg_t));
         info1("Rcv cmnd");
         osStatus_t err = osMessageQueuePut(rmsg_qID, packet, 0, 0);
-		if(err == osOK)info1("rc query");
-		else warn1("msgq err");
+		if(err == osOK)debug1("rc query");
+		else debug1("msgq err");
     }
-    else warn1("rcv size %d", (unsigned int)comms_get_payload_length(comms, msg));
+    else debug1("rcv size %d", (unsigned int)comms_get_payload_length(comms, msg));
 }
 
 static void incomingMsgHandler(void *args)
@@ -196,7 +196,7 @@ static void incomingMsgHandler(void *args)
 			cmd = packet.cmd;
 			if(cmd == CM_CURRENT_LOCATION)
 			{
-				info("Rcvd %u %u", ntoh16(packet.senderAddr), packet.cmd);
+				info("Crane command %lu %u", ntoh16(packet.senderAddr), packet.cmd);
 				while(osMutexAcquire(cloc_mutex, 1000) != osOK);
 				sloc.messageID = CRANE_LOCATION_MSG;
 				sloc.senderAddr = CRANE_ADDR;
@@ -216,10 +216,10 @@ static void incomingMsgHandler(void *args)
 				{
 					while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
 					cmd_buf[index] = cmd;
-					info("Rcvd %u %u", ntoh16(packet.senderAddr), packet.cmd);
+					info("Crane command %lu %u", ntoh16(packet.senderAddr), packet.cmd);
 					osMutexRelease(cmdb_mutex);
 				}
-				else ;// Ship not in game, command dropped
+				else info1("Cmd dropped");// Ship not in game, command dropped
 			}
 			else if(cmd == CM_NOTHING_TO_DO) ; // This command shouldn't be sent, but no harm done, just ignore
 			else ; // Invalid command, do nothing
@@ -338,7 +338,7 @@ static uint8_t getWinningCmd()
 
 static void doCommand(uint8_t wcmd)
 {
-	am_addr_t saddr;
+	static am_addr_t saddr;
 	cloc.cargo_here = false;
 	switch(wcmd)
 	{
@@ -354,7 +354,7 @@ static void doCommand(uint8_t wcmd)
 			cloc.cargo_here = true;
 			saddr = isShipHere(cloc.crane_x, cloc.crane_y);
 			if(saddr != 0)markCargo(saddr);
-			info1("Cargo placed");
+			info1("Cargo placed %lu", saddr);
 		break;
 		default: 
 		break;
