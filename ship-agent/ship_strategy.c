@@ -84,7 +84,7 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	while(osMutexAcquire(coop_mutex, 1000) != osOK);
 	coop_partner = my_address;
 	coop_destination = my_address;
-	coop_status = COOP_SEARCHING; // This is just a place-holder
+	coop_status = COOP_SEARCHING;
 	osMutexRelease(coop_mutex);
 
 	osThreadNew(startCoop, NULL, NULL); // Send start cooperation thread
@@ -136,7 +136,7 @@ static void manageCoop(void *args)
 	
 	for(;;)
 	{
-		osDelay(2*osKernelGetTickFreq()); // 2 seconds
+		osDelay(10*osKernelGetTickFreq()); // 2 seconds
 
 		while(osMutexAcquire(coop_mutex, 1000) != osOK);
 		if(coop_status == COOP_ACTIVE)
@@ -150,11 +150,11 @@ static void manageCoop(void *args)
 					stat = getCargoStatus(coop_partner);
 					if(stat != 0)
 					{
+						info1("Change dest");
 						coop_destination = coop_partner;
 						setXFirst(true);
 						setAlwaysPlaceCargo(true);
 						setCraneTactics(cc_to_address, coop_destination, getShipLocation(coop_destination));
-						info1("Change dest");
 					}
 					else 
 					{
@@ -168,16 +168,16 @@ static void manageCoop(void *args)
 					stat = getCargoStatus(my_address);
 					if(stat != 0)
 					{
+						info1("Change dest");
 						coop_destination = my_address;
 						setXFirst(true);
 						setAlwaysPlaceCargo(true);
 						setCraneTactics(cc_to_address, coop_destination, getShipLocation(coop_destination));
-						info1("Change dest");
 					}
 					else 
 					{
 						setCraneTactics(cc_do_nothing, 0, getShipLocation(0)); // All done!
-						// coop_status = COOP_SEARCHING; // In case new ships enter game, we can partner up!
+						coop_status = COOP_SEARCHING; // In case new ships enter game, we can partner up!
 						info1("Coop done!");
 					}
 				}
@@ -241,7 +241,7 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 
 				if(amsg.coopAddr != 0)
 				{
-					info1("cAddr %lu", amsg.coopAddr);
+					info1("cAddr %lu - pending", amsg.coopAddr);
 					while(osMutexAcquire(coop_mutex, 1000) != osOK);
 					coop_partner = smsg->senderAddr;
 					coop_status = COOP_PENDING;
@@ -317,17 +317,12 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 				setXFirst(true);
 				setAlwaysPlaceCargo(true);			
 				info1("Agreed - coop active!");
+				amsg.messageID = CONFIRM_MSG_ID;
+				amsg.senderAddr = smsg->senderAddr; // Piggy-backing destination address here
+				osMessageQueuePut(snd_msg_qID, &amsg, 0, 0);
+				info1("Send coop msg3");
 			}
-			else 
-			{
-				amsg.coopAddr = my_address; // Otherwise it's left floating
-				info1("Not agreed");
-			}
-			
-			amsg.messageID = CONFIRM_MSG_ID;
-			amsg.senderAddr = smsg->senderAddr; // Piggy-backing destination address here
-			osMessageQueuePut(snd_msg_qID, &amsg, 0, 0);
-			info1("Send coop msg3");
+			else info1("Not agreed");
 			break;
 
 		case CONFIRM_MSG_ID : 
@@ -434,18 +429,27 @@ am_addr_t get_nearest_n()
 	{
 		my_loc = getShipLocation(my_address);
 
-		sloc = getShipLocation(ship_addresses[0]);
-		smallest_dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
-		saddr = ship_addresses[0];
-
-		for(i=1;i<num_ships;i++)
+		for(i=0;i<num_ships;i++)
 		{
-			sloc = getShipLocation(ship_addresses[i]);
-			dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
-			if(dist < smallest_dist)
+			if(ship_addresses[i] != my_address)
 			{
-				smallest_dist = dist;
+				sloc = getShipLocation(ship_addresses[i]);
+				smallest_dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
 				saddr = ship_addresses[i];
+				break ;
+			}
+		}
+		for(;i<num_ships;i++)
+		{
+			if(ship_addresses[i] != my_address)
+			{
+				sloc = getShipLocation(ship_addresses[i]);
+				dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
+				if(dist < smallest_dist)
+				{
+					smallest_dist = dist;
+					saddr = ship_addresses[i];
+				}
 			}
 		}
 	}
@@ -477,7 +481,7 @@ am_addr_t get_nearest_n_wo_cargo()
 
 		for(i=0;i<num_ships;i++)
 		{
-			if(getCargoStatus(ship_addresses[i]) != 0)
+			if(ship_addresses[i] != my_address && getCargoStatus(ship_addresses[i]) != 0)
 			{
 				sloc = getShipLocation(ship_addresses[i]);
 				smallest_dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
@@ -487,7 +491,7 @@ am_addr_t get_nearest_n_wo_cargo()
 		}
 		for(;i<num_ships;i++)
 		{
-			if(getCargoStatus(ship_addresses[i]) != 0)
+			if(ship_addresses[i] != my_address && getCargoStatus(ship_addresses[i]) != 0)
 			{
 				sloc = getShipLocation(ship_addresses[i]);
 				dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);

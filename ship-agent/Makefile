@@ -31,8 +31,8 @@ INCLUDES                += -Xassembler -I$(BUILD_DIR) -I.
 RELEASE_BUILD           ?= 0
 
 # Set the lll verbosity base level
-CFLAGS                  += -DBASE_LOG_LEVEL=0xFFFF
-#CFLAGS                  += -DBASE_LOG_LEVEL=LOG_MASK_INFO
+#CFLAGS                  += -DBASE_LOG_LEVEL=0xFFFF
+CFLAGS                  += -DBASE_LOG_LEVEL=LOG_MASK_INFO
 
 # Enable debug messages
 VERBOSE                 ?= 0
