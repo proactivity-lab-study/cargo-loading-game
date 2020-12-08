@@ -264,7 +264,7 @@ static void locationMsgHandler(void *args)
 				sloc.x = packet.x_coordinate;
 				sloc.y = packet.y_coordinate;
 				saddr = getShipAddr(sloc);
-				if(saddr != 0)markCargo(saddr);
+				if(saddr != 0 && getCargoStatus(saddr) != 0)markCargo(saddr);
 			}
 
 			clearCmdsBuf(); // Clear contents of cmds buffer
@@ -314,7 +314,7 @@ static void commandMsgHandler(void *args)
 
 static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_t result, void * user)
 {
-    logger(result == COMMS_SUCCESS ? LOG_INFO1: LOG_WARN1, "Cmnd sent %u", result);
+    logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "Cmnd sent %u", result);
     osThreadFlagsSet(snd_task_id, 0x00000001U);
 }
 
@@ -360,6 +360,7 @@ static void sendCommandMsg(void *args)
 void setXFirst(bool val)
 {
 	static bool v;
+	v = val;
 	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
 	Xfirst = val;
 	osMutexRelease(cctt_mutex);
@@ -388,6 +389,7 @@ bool getXFirst()
 void setAlwaysPlaceCargo(bool val)
 {
 	static bool v;
+	v = val;
 	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
 	alwaysPlaceCargo = val;
 	osMutexRelease(cctt_mutex);
