@@ -308,6 +308,7 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 
 			if(amsg.agreement)
 			{
+				info1("Agreed - coop active!");
 				while(osMutexAcquire(coop_mutex, 1000) != osOK);
 				coop_status = COOP_ACTIVE;
 				coop_partner = smsg->senderAddr;
@@ -316,7 +317,6 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 				osMutexRelease(coop_mutex);
 				setXFirst(true);
 				setAlwaysPlaceCargo(true);			
-				info1("Agreed - coop active!");
 				amsg.messageID = CONFIRM_MSG_ID;
 				amsg.senderAddr = smsg->senderAddr; // Piggy-backing destination address here
 				osMessageQueuePut(snd_msg_qID, &amsg, 0, 0);
