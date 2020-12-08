@@ -108,7 +108,7 @@ static void startCoop(void *args)
 		dest = get_nearest_n();
 
 		while(osMutexAcquire(coop_mutex, 1000) != osOK);
-		if(coop_status != COOP_ACTIVE) // TODO does this mess things up?
+		if(coop_status != COOP_ACTIVE) // COOP_PENDING is reset here every 10 seconds
 		{
 			coop_status = COOP_SEARCHING;
 			coop_partner = my_address;
@@ -116,12 +116,15 @@ static void startCoop(void *args)
 		}
 		if(coop_partner != dest) // If nearest neighbour has changed, send start cooperation message
 		{
-			info1("start snd coop");
 			cmsg.messageID = START_COOP_MSG_ID;
 			cmsg.senderAddr = dest; // Piggy-backing destination address here
 			cmsg.coopAddr = dest;
 			cmsg.agreement = true;
-			if(dest != my_address)osMessageQueuePut(snd_msg_qID, &cmsg, 0, 0);
+			if(dest != my_address)
+			{
+				osMessageQueuePut(snd_msg_qID, &cmsg, 0, 0);
+				info1("Send coop msg1");
+			}
 		}
 		osMutexRelease(coop_mutex);
 	}
@@ -141,6 +144,7 @@ static void manageCoop(void *args)
 			stat = getCargoStatus(coop_destination);
 			if(stat == 0)
 			{
+				info1("Dest has cargo");
 				if(coop_destination == my_address)
 				{
 					stat = getCargoStatus(coop_partner);
@@ -150,30 +154,35 @@ static void manageCoop(void *args)
 						setXFirst(true);
 						setAlwaysPlaceCargo(true);
 						setCraneTactics(cc_to_address, coop_destination, getShipLocation(coop_destination));
+						info1("Change dest");
 					}
 					else 
 					{
 						setCraneTactics(cc_do_nothing, 0, getShipLocation(0)); // All done!
-						// coop_status = COOP_SEARCHING; // In case new ships enter game, we can partner up!
+						coop_status = COOP_SEARCHING; // In case new ships enter game, we can partner up!
+						info1("Coop done!");
 					}
 				}
 				else
 				{
-					stat = getCargoStatus(coop_destination);
+					stat = getCargoStatus(my_address);
 					if(stat != 0)
 					{
 						coop_destination = my_address;
 						setXFirst(true);
 						setAlwaysPlaceCargo(true);
 						setCraneTactics(cc_to_address, coop_destination, getShipLocation(coop_destination));
+						info1("Change dest");
 					}
 					else 
 					{
 						setCraneTactics(cc_do_nothing, 0, getShipLocation(0)); // All done!
 						// coop_status = COOP_SEARCHING; // In case new ships enter game, we can partner up!
+						info1("Coop done!");
 					}
 				}
-			} // Cooperation destination has not received cargo yet
+			}
+			else info1("No cargo"); // Cooperation destination has not received cargo yet
 		} // No active cooperation
 		osMutexRelease(coop_mutex);
 	}
@@ -197,13 +206,12 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 	switch(rmsg[0])
 	{
 		case START_COOP_MSG_ID :
-			info1("rcvd start");
+			info1("Rcv coop msg1");
 			smsg = (coop_msg_t *) comms_get_payload(comms, msg, pl_len);
 			nearest = get_nearest_n();
 			
 			if(nearest == smsg->senderAddr)
 			{
-				info1("agree");
 				amsg.coopAddr = 0;
 				amsg.agreement = true;
 
@@ -233,27 +241,30 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 
 				if(amsg.coopAddr != 0)
 				{
+					info1("cAddr %lu", amsg.coopAddr);
 					while(osMutexAcquire(coop_mutex, 1000) != osOK);
 					coop_partner = smsg->senderAddr;
 					coop_status = COOP_PENDING;
 					coop_destination = amsg.coopAddr;
 					osMutexRelease(coop_mutex);
 				}
+				else info1("Both have cargo");
 			}
 			else
 			{
 				amsg.coopAddr = my_address; // Otherwise it is left floating
 				amsg.agreement = false;
-				info1("no dice");
+				info1("Not nearest");
 			}
 
 			amsg.messageID = ANS_COOP_MSG_ID;
 			amsg.senderAddr = smsg->senderAddr; // Piggy-backing destination address here
 			osMessageQueuePut(snd_msg_qID, &amsg, 0, 0);
+			info1("Send coop msg2");
 			break;
 
 		case ANS_COOP_MSG_ID :
-			info1("rcvd ans");
+			info1("Rcv coop msg2");
 			smsg = (coop_msg_t *)comms_get_payload(comms, msg, pl_len);
 			nearest = get_nearest_n();
 			if(nearest == smsg->senderAddr)
@@ -285,13 +296,14 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 						else amsg.agreement = false; // No Agreement
 					}
 				}
-				else ; // Nearest neigbour does not agree, nothing to do, try again later
+				else info1("No!");; // Nearest neigbour does not agree, nothing to do, try again later
 			}
 			else 
 			{
 				// Not my nearest neighbour, respond with disagreement and wait for startCoop 
 				// thread to send new start cooperation message to nearest neighbour.
 				amsg.agreement = false;
+				info1("Not nearest");
 			}
 
 			if(amsg.agreement)
@@ -304,38 +316,48 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 				osMutexRelease(coop_mutex);
 				setXFirst(true);
 				setAlwaysPlaceCargo(true);			
-				info1("coop active!");
+				info1("Agreed - coop active!");
 			}
-			else amsg.coopAddr = my_address; // Otherwise it's left floating
+			else 
+			{
+				amsg.coopAddr = my_address; // Otherwise it's left floating
+				info1("Not agreed");
+			}
 			
 			amsg.messageID = CONFIRM_MSG_ID;
 			amsg.senderAddr = smsg->senderAddr; // Piggy-backing destination address here
 			osMessageQueuePut(snd_msg_qID, &amsg, 0, 0);
+			info1("Send coop msg3");
 			break;
 
 		case CONFIRM_MSG_ID : 
-			info1("rcvd conf");
+			info1("Rcv coop msg3");
 			coop_msg_t * smsg = (coop_msg_t *)comms_get_payload(comms, msg, pl_len);
 			
 			while(osMutexAcquire(coop_mutex, 1000) != osOK);
-			if(smsg->coopAddr == coop_partner)
+			if(coop_status == COOP_PENDING)
 			{
-				if(smsg->agreement)
+				if(smsg->senderAddr == coop_partner)
 				{
-					coop_status = COOP_ACTIVE;
-					setXFirst(true);
-					setAlwaysPlaceCargo(true);
-					setCraneTactics(cc_to_address, coop_destination, getShipLocation(coop_destination));
+					if(smsg->agreement)
+					{
+						info1("Agreed - coop active!");
+						coop_status = COOP_ACTIVE;
+						setXFirst(true);
+						setAlwaysPlaceCargo(true);
+						setCraneTactics(cc_to_address, coop_destination, getShipLocation(coop_destination));
+					}
+					else 
+					{
+						coop_status = COOP_SEARCHING; // try again later
+						coop_partner = my_address;
+						coop_destination = my_address;
+						info1("Not agreed");
+					}
 				}
-				else 
-				{
-					coop_status = COOP_SEARCHING; // try again later
-					coop_partner = my_address;
-					coop_destination = my_address;
-				}
+				else ; // Was waiting for confirmation, but not from this partner.
 			}
-			else ; 	// Someone confirming me unexpectedly. Drop this message and wait for partner
-					// or startCoop thread to clear COOP_PENDING flag. 
+			else ; // Someone confirming me unexpectedly. Drop this message.
 			osMutexRelease(coop_mutex);
 		default:
 			break;
@@ -424,6 +446,56 @@ am_addr_t get_nearest_n()
 			{
 				smallest_dist = dist;
 				saddr = ship_addresses[i];
+			}
+		}
+	}
+	else ;//no ships beside me return my address
+	
+	return saddr;
+}
+
+// Selects ship closest to me without cargo yet.
+// In case of tie, selects first one found.
+// If no ships or everybody has cargo returns own address.
+// Returns own address even if we already have cargo.
+// Takes into account cargo status of nearest ship.
+am_addr_t get_nearest_n_wo_cargo()
+{
+	am_addr_t ship_addresses[MAX_SHIPS], saddr;
+	uint8_t num_ships, i;
+	uint16_t dist, smallest_dist;
+
+	loc_bundle_t sloc, my_loc;
+
+	num_ships = getAllShipsAddr(ship_addresses, MAX_SHIPS);
+	
+	saddr = my_address;
+
+	if(num_ships > 0)
+	{
+		my_loc = getShipLocation(my_address);
+
+		for(i=0;i<num_ships;i++)
+		{
+			if(getCargoStatus(ship_addresses[i]) != 0)
+			{
+				sloc = getShipLocation(ship_addresses[i]);
+				smallest_dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
+				saddr = ship_addresses[i];
+				break ;
+			}
+		}
+		for(;i<num_ships;i++)
+		{
+			if(getCargoStatus(ship_addresses[i]) != 0)
+			{
+				sloc = getShipLocation(ship_addresses[i]);
+				dist = calcDistance(sloc.x, sloc.y, my_loc.x, my_loc.y);
+				if(dist < smallest_dist)
+				{
+					smallest_dist = dist;
+					saddr = ship_addresses[i];
+				}
 			}
 		}
 	}
