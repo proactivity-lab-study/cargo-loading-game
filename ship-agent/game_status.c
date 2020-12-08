@@ -232,6 +232,7 @@ void systemReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* us
 				packet2.senderAddr = my_address;
 				osMessageQueuePut(snd_msg_qID, &packet2, 0, 1000);
 			}
+			break;
 
 			case SHIP_QRMSG :
 			packet = (query_response_msg_t *) comms_get_payload(comms, msg, sizeof(query_response_msg_t));
@@ -358,6 +359,7 @@ am_addr_t getShipAddr(loc_bundle_t sloc)
 }
 
 // Fills buffer pointed to by 'saddr' with addresses of all ships currently known.
+// Own address is included.
 // Returns number of ships added to buffer 'saddr'.
 // This function can block.
 uint8_t getAllShipsAddr(am_addr_t saddr[], uint8_t mlen)
@@ -380,6 +382,7 @@ void markCargo(am_addr_t addr)
 {
 	uint8_t i;
 	static am_addr_t saddr;
+	saddr = addr;
 	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 	for(i=0;i<MAX_SHIPS;i++)if(ships[i].ship_addr == addr && ships[i].ship_in_game)
 	{
