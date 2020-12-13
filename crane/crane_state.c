@@ -161,7 +161,7 @@ static void craneMainLoop(void *args)
 		osMessageQueuePut(smsg_qID, &sloc, 0, 0);	
 		osMutexRelease(cloc_mutex);
 		
-		info1("Crane %u %u %u", sloc.x_coordinate, sloc.y_coordinate, sloc.cargoPlaced);
+		info1("Crane state %u %u %u", sloc.x_coordinate, sloc.y_coordinate, sloc.cargoPlaced);
 	}
 }
 
