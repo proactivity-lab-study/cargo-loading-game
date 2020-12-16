@@ -14,22 +14,22 @@
  * - receive crane location request messages from ships
  * - send out crane location messages
  * 
- * 
  * During crane update interval all ships can send their movement commands
  * to the crane. A correct movement command is one of CM_UP, CM_DOWN, CM_LEFT 
  * CM_RIGHT, CM_PLACE_CARGO, CM_CURRENT_LOCATION. Each will request the crane
  * to move one step up, down, left, right or place cargo in current location 
  * respectively. CM_CURRENT_LOCATION asks the crane to send its current location
- * and whether there is cargo in this location. This messages is sent immediately.
+ * and whether there is cargo in this location. This messages is sent immediately
+ * and it is an unicast message.
  * 
  * Crane stores one command per ship until the end of the update interval. Each
- * ship can send as many commands as it wants to (including changing the command)
+ * ship can send as many commands as it wants (including changing the command)
  * but only the last received command is stored and later processed. 
  * 
  * When the update event occures, crane processes all received commands and
  * selects a winning command. The winning command is always the most popular 
  * choice, i.e. the command that was requested the most during this round. In
- * case of a tie the winning command is randomly chosen from the two (or several)
+ * case of a tie the winning command is randomly chosen from the two (or more)
  * most popular requests. If no movement commands where received, no winning 
  * command is chosen. Then all received commands are erased in preparation for
  * the next update interval.
@@ -43,9 +43,11 @@
  * 
  * If the crane is asked to exit the game area (see GRID_LOWER_BOUND and
  * GRID_UPPER_BOUND in game_types.h) then crane location is not changed but
- * a new state messages is still broadcast with the current (unchanged) 
- * location.
+ * a new state messages is still broadcast with the last valid location.
  *
+ * TODO CRANE_ADDR and SYSYEM_ADDR are still used to identify crane-agent. This
+ * 		however does not solve crane-agent identity theft and impersonation problem
+ * 		so in this regard it is redundant. Suggested for removal.
  * 
  * Copyright Proactivity Lab 2020
  *
@@ -154,11 +156,11 @@ static void craneMainLoop(void *args)
 		info("Winning cmd %u", wcmd);
 		if(wcmd > 0 && wcmd < CM_CURRENT_LOCATION)doCommand(wcmd);
 		sloc.messageID = CRANE_LOCATION_MSG;
-		sloc.senderAddr = my_address;
+		sloc.senderAddr = AM_BROADCAST_ADDR; // Piggybacking destination address here
 		sloc.x_coordinate = cloc.crane_x;
 		sloc.y_coordinate = cloc.crane_y;
 		sloc.cargoPlaced = cloc.cargo_here;
-		osMessageQueuePut(smsg_qID, &sloc, 0, 0);	
+		osMessageQueuePut(smsg_qID, &sloc, 0, 0); 
 		osMutexRelease(cloc_mutex);
 		
 		info1("Crane state %u %u %u", sloc.x_coordinate, sloc.y_coordinate, sloc.cargoPlaced);
@@ -199,7 +201,7 @@ static void incomingMsgHandler(void *args)
 				info("Crane command %lu %u", ntoh16(packet.senderAddr), packet.cmd);
 				while(osMutexAcquire(cloc_mutex, 1000) != osOK);
 				sloc.messageID = CRANE_LOCATION_MSG;
-				sloc.senderAddr = CRANE_ADDR;
+				sloc.senderAddr = ntoh16(packet.senderAddr); // Piggybacking destination address here
 				sloc.x_coordinate = cloc.crane_x;
 				sloc.y_coordinate = cloc.crane_y;
 				sloc.cargoPlaced = cloc.cargo_here;
@@ -268,8 +270,7 @@ static void sendLocationMsg(void *args)
 			
 		// Send data packet
 	    comms_set_packet_type(cradio, &m_msg, AMID_CRANECOMMUNICATION);
-	    comms_am_set_destination(cradio, &m_msg, AM_BROADCAST_ADDR);
-	    //comms_am_set_source(cradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
+	    comms_am_set_destination(cradio, &m_msg, packet.senderAddr);
 	    comms_set_payload_length(cradio, &m_msg, sizeof(crane_location_msg_t));
 
 	    comms_error_t result = comms_send(cradio, &m_msg, radioSendDone, NULL);

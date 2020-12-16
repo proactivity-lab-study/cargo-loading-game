@@ -7,28 +7,33 @@
  * 
  * The functionality of the system module is to:
  * 
- * - initilises game state variables and ships database
- * - handles all quiery messages (query_msg_t)
- * - registers new ships to the game
- * - keeps track of game state and ships in game
- * - responds to all quierys 
+ * - initilise game state variables and ships database
+ * - handle all quiery messages (query_msg_t)
+ * - register new ships to the game
+ * - keep track of game state and ships in game
+ * - respond to all quierys 
  * 		-global time left
  * 		-ship data
  * 		-ships in game
  * 		-all ships with cargo
  * 
- * The first radio message to arrive, triggers random number generator
+ * The first radio message to arrive triggers random number generator
  * initialisation (seed) and also starts the game (starts game time 
  * count). Ships enter the game by sending a welcome message. When a 
  * welcome message is received, the ship is registered and its 
  * location coordinates and cargo loading deadline is randomly chosen. 
  * The ship is then informed of registration with a welcome response 
- * message. All quiery messages trigger a response message.
+ * message. All quiery messages trigger a response message. All response
+ * messages are unicast.
  * 
  * See clg_comm.h about message structures and game_types.h about 
  * default initial values and message identifiers.
  * 
+ * TODO CRANE_ADDR and SYSYEM_ADDR are still used to identify crane-agent. This
+ * 		however does not solve crane-agent identity theft and impersonation problem
+ * 		so in this regard it is redundant. Suggested for removal.
  * 
+ * TODO Mechanism to leave the game.
  * 
  * Copyright Proactivity Lab 2020
  *
@@ -282,7 +287,6 @@ static void sendResponseMsg(void *arg)
 		// Send data packet
 	    comms_set_packet_type(sradio, &msg, AMID_SYSTEMCOMMUNICATION);
 	    comms_am_set_destination(sradio, &msg, dest);
-	    //comms_am_set_source(sradio, &msg, radio_address); // No need, it will use the one set with radio_init
 	    comms_set_payload_length(sradio, &msg, sizeof(query_response_msg_t));
 
 	    comms_error_t result = comms_send(sradio, &msg, radioSendDone, NULL);
@@ -319,7 +323,6 @@ static void sendResponseBuf(void *arg)
 		// Send data packet
 	    comms_set_packet_type(sradio, &msg, AMID_SYSTEMCOMMUNICATION);
 	    comms_am_set_destination(sradio, &msg, packet.shipAddr);
-	    //comms_am_set_source(radio, &msg, radio_address); // No need, it will use the one set with radio_init
 	    comms_set_payload_length(sradio, &msg, sizeof(query_response_buf_t));
 
 	    comms_error_t result = comms_send(sradio, &msg, radioSendDone, NULL);

@@ -20,13 +20,23 @@ enum ActiveMessageIdEnum
 /************************************************************
  *	Radio message structures
  ************************************************************/
+#pragma pack(push)
 
 //-------- SHIP MESSAGE STRUCTURES
 
-// Add your ship-2-ship message structures here
+// Add your ship-to-ship message structures here
+#pragma pack(1)
+typedef struct ship_msg_t { // Template for ship-to-ship message
+	uint8_t messageID; 		// This defines the type of the message, recommended
+	am_addr_t senderAddr;	// This defines the sender of the message, also recommended
+	uint8_t val8;			
+	uint16_t val16;			// Use hton16() when sending and ntoh16() when receiving, see endianness.h
+	uint32_t val32;			// Use hton32() when sending and ntoh32() when receiving, see endianness.h
+	float valf;				// Use htonf() when sending and ntohf() when receiving, see endianness.h
+} ship_msg_t;
 
 //-------- CRANE MESSAGE STRUCTURES
-#pragma pack(push)
+
 #pragma pack(1)
 typedef struct crane_location_msg_t {
 	uint8_t messageID;
@@ -71,6 +81,7 @@ typedef struct query_response_buf_t { // Structure for all ships and all cargo q
 	uint8_t len; 			// Number of addresses in 'ships' buffer
 	am_addr_t ships[MAX_SHIPS];
 } query_response_buf_t;
+
 #pragma pack(pop)
 
 #endif // CLG_COMM_H

@@ -1,7 +1,7 @@
 /**
  * 
  * This is the main function of the crane-agent. The crane-agent
- * composes the actual game engine and the crane itself.
+ * composes the actual game engine and the crane state handler.
  * 
  * The functionality of this main function is to
  * 
@@ -11,7 +11,7 @@
  * - initialise radio hardware and do radio setup
  * - initialise the two modules of the crane-agent (system and 
  *   crane)
- * - print 'heartbeat' message to log every 60 seconds
+ * - print 'heartbeat' message to log every M_HEARTBEAT_INTERVAL seconds
  * 
  * Radio setup involves creating two message streams designated 
  * by AMID_CRANECOMMUNICATION and AMID_SYSTEMCOMMUNICATION
@@ -59,6 +59,8 @@ INCBIN(Header, "header.bin");
 #include "system_state.h"
 #include "crane_state.h"
 #include "clg_comm.h"
+
+#define M_HEARTBEAT_INTERVAL 60		// Heartbeat interval, seconds
 
 static void radio_start_done (comms_layer_t * comms, comms_status_t status, void * user)
 {
@@ -125,7 +127,7 @@ void setup_loop (void * arg)
     // Loop forever
     for (;;)
     {
-        osDelay(60*osKernelGetTickFreq()); // 60 seconds
+        osDelay(M_HEARTBEAT_INTERVAL*osKernelGetTickFreq());
 		info1("HB"); // Heartbeat
     }
 }

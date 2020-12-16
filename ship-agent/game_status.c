@@ -1,5 +1,46 @@
 /**
- *
+ * 
+ * This is the game status module of ship-agent. It is responsible for keeping track
+ * of game status. Game status includes game time and information about ships 
+ * (including self) and their status (address, location, cargo status, departure time). 
+ * 
+ * The main functionality of this module is to
+ * 
+ * - send WELCOME_MSG every GS_WELCOME_MSG_RETRY_INTERVAL seconds until a WELCOME_RMSG
+ *   is received 
+ * - perform game status update every GS_UPDATE_INTERVAL seconds, including
+ * 		- info about new ships in game
+ * 		- info about ship status
+ * - send different game state query messages to crane-agent
+ * - receive different game state messages from crane-agent
+ * - provide utility functions for crane control module and ship strategy module to
+ *   get and set game status information (see game_status.h).
+ * 
+ * Game status module is mostly a database of information about ships active in the
+ * current game. Different actions are taken to keep this database as up to date as 
+ * possible. In good radio transmission conditions, where messages are seldom lost, 
+ * this database should be up to date to well under a second. The database can hold
+ * MAX_SHIPS (see game_types.h) number of ships. 
+ * 
+ * Note:
+ * 		There is currently no mechanism for a ship to publicly announce leaving the 
+ * 		game or becoming inactive. 
+ * 
+ * Note:
+ * 		Cargo status of ships is set to false after initialisation and there is no
+ * 		mechanism to reset it to false again during the game. So take care when 
+ * 		cargo status of a ship is set to true, there is no going back after this 
+ * 		action.
+ * 
+ * TODO Regular cargo status updates.
+ * 
+ * TODO Mechanism to leave the game.
+ * 
+ * TODO CRANE_ADDR and SYSYEM_ADDR are still used to identify crane-agent. This
+ * 		however does not solve crane-agent identity theft and impersonation problem
+ * 		so in this regard it is redundant. Suggested for removal.
+ * 
+ * 
  * Copyright Proactivity Lab 2020
  *
  * @license MIT
@@ -21,6 +62,9 @@
 #define __MODUUL__ "gstat"
 #define __LOG_LEVEL__ (LOG_LEVEL_game_status & BASE_LOG_LEVEL)
 #include "log.h"
+
+#define GS_UPDATE_INTERVAL 60 				// Update game state, seconds
+#define GS_WELCOME_MSG_RETRY_INTERVAL 10 	// Retry welcome message, seconds
 
 typedef struct ship_data_t{
 	bool ship_in_game;
@@ -115,7 +159,7 @@ static void getAllShipsIngame(void *args)
 	
 	for(;;)
 	{
-		osDelay(60*osKernelGetTickFreq()); // 60 seconds
+		osDelay(GS_UPDATE_INTERVAL*osKernelGetTickFreq());
 		packet.messageID = AS_QMSG;
 		packet.senderAddr = my_address;
 		osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
@@ -167,7 +211,7 @@ static void welcomeMsgLoop(void *args)
 			osThreadTerminate(wmsg_thread);
 		}
 		
-		osDelay(10*osKernelGetTickFreq()); // 10 seconds
+		osDelay(GS_WELCOME_MSG_RETRY_INTERVAL*osKernelGetTickFreq());
 	}
 }
 
@@ -307,7 +351,6 @@ static void sendMsgLoop(void *args)
 		// Send data packet
 	    comms_set_packet_type(sradio, &m_msg, AMID_SYSTEMCOMMUNICATION);
 	    comms_am_set_destination(sradio, &m_msg, system_address);
-	    //comms_am_set_source(sradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
 	    comms_set_payload_length(sradio, &m_msg, sizeof(query_msg_t));
 
 	    comms_error_t result = comms_send(sradio, &m_msg, radioSendDone, NULL);

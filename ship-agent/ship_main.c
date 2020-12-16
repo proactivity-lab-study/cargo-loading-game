@@ -12,7 +12,7 @@
  * - initialise radio hardware and do radio setup
  * - initialise the modules of the ship-agent (crane_control, 
  *   game_status and ship_strategy)
- * - print 'heartbeat' message to log every 60 seconds
+ * - print 'heartbeat' message to log every M_HEARTBEAT_INTERVAL seconds
  * 
  * Radio setup involves creating three message streams designated 
  * by AMID_CRANECOMMUNICATION, AMID_SHIPCOMMUNICATION and 
@@ -61,6 +61,8 @@
 // Include the information header binary
 #include "incbin.h"
 INCBIN(Header, "header.bin");
+
+#define M_HEARTBEAT_INTERVAL 60		// Heartbeat interval, seconds
 
 static void radio_start_done (comms_layer_t * comms, comms_status_t status, void * user)
 {
@@ -128,7 +130,7 @@ void setup_loop (void * arg)
     // Loop forever
     for (;;)
     {
-        osDelay(60*osKernelGetTickFreq()); // 60 secondss
+        osDelay(M_HEARTBEAT_INTERVAL*osKernelGetTickFreq());
 		info("HB"); // Heartbeat
     }
 }
