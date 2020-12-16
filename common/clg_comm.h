@@ -20,6 +20,7 @@ enum ActiveMessageIdEnum
 /************************************************************
  *	Radio message structures
  ************************************************************/
+#pragma pack(push)
 
 //-------- SHIP MESSAGE STRUCTURES
 
@@ -78,6 +79,7 @@ typedef struct query_response_buf_t { // Structure for all ships and all cargo q
 	uint8_t len; 			// Number of addresses in 'ships' buffer
 	am_addr_t ships[MAX_SHIPS];
 } query_response_buf_t;
+
 #pragma pack(pop)
 
 #endif // CLG_COMM_H

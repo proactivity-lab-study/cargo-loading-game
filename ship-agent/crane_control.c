@@ -1,5 +1,54 @@
 /**
- *
+ * 
+ * This is the crane control module of ship-agent. It is responsible for sending
+ * crane control commands to crane-agent. It also listens to control commands 
+ * sent by other ship-agents and keeps track of their commands. All sorts of
+ * different crane control tactics are implemented here.
+ * 
+ * Main functionality of this module is:
+ * 
+ * - keep track of crane update interval and possibly issue commands each interval
+ * - send control command messages to crane-agent
+ * - choose approriate crane control command based on current tactics
+ * - listen to and store command messages of other ship-agents
+ * - keep a local record of current crane state (location)
+ * - signal game state module about cargo receivement events (both self and others)
+ * 
+ * Crane control module sits and waits for crane location messages to arrive. Upon
+ * receiving a crane location message, local record of crane state is updated. If
+ * cargo is placed since last crane state and crane location matches location of 
+ * any ship in game (including self), then game status module is notified of cargo
+ * receivement for that ship. Also after receiving a crane location message crane
+ * update interval time count is reset. Crane control module must choose a command
+ * and send a crane command messages before crane update interval time passes.
+ * 
+ * Control commands are chosen based on crane control tactics. Ship strategy module 
+ * must choose (and implement) a tactic. Some basic tactics are implemented (see
+ * crane_control.h) but different new tactics can be added by users. 
+ * 
+ * Note:
+ * 		After ship-agent boot and first initialisation the physical address of 
+ * 		crane-agent is not yet known. The first CRANE_LOCATION_MSG to arrive reveals
+ * 		(identity manipulation threat?) crane-agent physical address. All messages
+ * 		sent before this event will be broadcast and all messages sent after this
+ * 		event will be unicast. 
+ * 
+ * TODO Currently crane command messages are sent as unicast directly to crane-
+ * 		agent. This means tactics such as cc_parrot_ship and cc_popular_command
+ * 		wont work, because nobody except crane will receive crane control messages.
+ * 		Simple solution would be to use broadcast globally, but maybe make it a 
+ * 		compile time choice?
+ * 
+ * TODO CRANE_ADDR and SYSYEM_ADDR are still used to identify crane-agent. This
+ * 		however does not solve crane-agent identity theft and impersonation problem
+ * 		so in this regard it is redundant. Suggested for removal.
+ * 
+ * TODO Sending command CM_CURRENT_LOCATION and receiving a location message
+ * 		in response resets crane interval time count. This messes up crane 
+ * 		command sending. Possible fix is to set some sort of flag about sending
+ * 		command CM_CURRENT_LOCATION and then when a location message is received
+ * 		crane interval time count is not reset and the flag is cleared instead.
+ * 
  * Copyright Proactivity Lab 2020
  *
  * @license MIT
@@ -342,7 +391,6 @@ static void sendCommandMsg(void *args)
 		// Send data packet
 	    comms_set_packet_type(cradio, &m_msg, AMID_CRANECOMMUNICATION);
 	    comms_am_set_destination(cradio, &m_msg, crane_address);
-	    //comms_am_set_source(cradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
 	    comms_set_payload_length(cradio, &m_msg, sizeof(crane_command_msg_t));
 
 	    comms_error_t result = comms_send(cradio, &m_msg, radioSendDone, NULL);
@@ -466,6 +514,8 @@ static uint8_t goToDestination(uint8_t x, uint8_t y)
 
 // Returns command sent by ship with sID.
 // If no such ship or no command, returns CM_NOTHING_TO_DO.
+// This tactic can work only if other ships send their 
+// crane command messages as broadcast. 
 static uint8_t parrotShip(am_addr_t sID)
 {
 	uint8_t cmd, i;
@@ -489,6 +539,8 @@ static uint8_t parrotShip(am_addr_t sID)
 // Returns most popular command sent by all other ships this round.
 // In case of tie, favors the first most popular choice found.
 // If no ship or commands, returns CM_NOTHING_TO_DO.
+// This tactic can work only if other ships send their 
+// crane command messages as broadcast. 
 static uint8_t selectPopular()
 {
 	uint8_t i, n;

@@ -1,9 +1,29 @@
 /**
- *
+ * 
+ * This is the ship strategy module of ship-agent. It's purpose is to communicate with 
+ * other ships and establish some kind of cooperation. It is also responsible for 
+ * setting the tactics and goals for crane control module.
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
  * TODO reminder to use hton and ntoh functions to assign variable values
  * 		larger than a byte in network messages!! 
  *
- * TODO take into account cargo status of nearest neighbour
+ * TODO Mechanism to leave the game.
  * 
  *
  * 
@@ -32,6 +52,8 @@
 #define __MODUUL__ "sstrt"
 #define __LOG_LEVEL__ (LOG_LEVEL_ship_strategy & BASE_LOG_LEVEL)
 #include "log.h"
+
+#define SS_DEFAULT_DELAY 60 // A delay, seconds
 
 enum {
 	START_COOP_MSG_ID = 130,
@@ -72,11 +94,11 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 {
 	coop_mutex = osMutexNew(NULL); // Protects cooperation parameter values
 	snd_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, sizeof(coop_msg_t), NULL);
-
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	// This is the only write, so not going to protect it with mutex
 
+	// Default tactics choices
 	setXFirst(true);
 	setAlwaysPlaceCargo(true);
 	setCraneTactics(cc_do_nothing, 0, getShipLocation(0));
@@ -392,12 +414,9 @@ static void sendMsg(void *args)
 		smsg->coopAddr = packet.coopAddr;
 		smsg->agreement = packet.agreement;
 
-
-
 		// Send data packet
 	    comms_set_packet_type(sradio, &m_msg, AMID_SHIPCOMMUNICATION);
 	    comms_am_set_destination(sradio, &m_msg, dest);
-	    //comms_am_set_source(sradio, &m_msg, radio_address); // No need, it will use the one set with radio_init
 	    comms_set_payload_length(sradio, &m_msg, sizeof(coop_msg_t));
 
 	    comms_error_t result = comms_send(sradio, &m_msg, radioSendDone, NULL);
