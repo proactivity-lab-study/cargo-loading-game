@@ -56,7 +56,7 @@ PROGRAM_DEST_ADDR       ?= $(APP_START)
 # The variable needs to point at the subdirectory with the version number, set
 # it in Makefile.private or through the environment.
 
-SILABS_SDKDIR           ?= $(HOME)/SimplicityStudio_v4/developer/sdks/gecko_sdk_suite/v2.6
+SILABS_SDKDIR           ?= $(HOME)/SimplicityStudio_v4/developer/sdks/gecko_sdk_suite/v2.7
 
 # Pull in the developer's private configuration overrides and settings
 -include Makefile.private
