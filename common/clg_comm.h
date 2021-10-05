@@ -26,7 +26,7 @@ enum ActiveMessageIdEnum
 
 // Add your ship-to-ship message structures here
 #pragma pack(1)
-typedef struct ship_msg_t { // Template for ship-to-ship message
+typedef struct {            // Template for ship-to-ship message
 	uint8_t messageID; 		// This defines the type of the message, recommended
 	am_addr_t senderAddr;	// This defines the sender of the message, also recommended
 	uint8_t val8;			
@@ -38,7 +38,7 @@ typedef struct ship_msg_t { // Template for ship-to-ship message
 //-------- CRANE MESSAGE STRUCTURES
 
 #pragma pack(1)
-typedef struct crane_location_msg_t {
+typedef struct {
 	uint8_t messageID;
 	am_addr_t senderAddr;
 	uint8_t x_coordinate;
@@ -47,7 +47,7 @@ typedef struct crane_location_msg_t {
 } crane_location_msg_t;
 
 #pragma pack(1)
-typedef struct crane_command_msg_t {
+typedef struct {
 	uint8_t messageID;
 	am_addr_t senderAddr;
 	uint8_t cmd; // Command
@@ -56,14 +56,14 @@ typedef struct crane_command_msg_t {
 //-------- SYSTEM MESSAGE STRUCTURES
 
 #pragma pack(1)
-typedef struct query_msg_t { // Structure for all system queries and welcome message
+typedef struct { // Structure for all system queries and welcome message
 	uint8_t messageID; 		// This defines the type of the query 
 	am_addr_t senderAddr;
 	am_addr_t shipAddr; 	// Optional, not used in all queries
 } query_msg_t;
 
 #pragma pack(1)
-typedef struct query_response_msg_t { // Structure for system query and welcome message responses
+typedef struct { // Structure for system query and welcome message responses
 	uint8_t messageID; 		// This defines the type of the response
 	am_addr_t senderAddr;
 	am_addr_t shipAddr; 
@@ -74,7 +74,7 @@ typedef struct query_response_msg_t { // Structure for system query and welcome 
 } query_response_msg_t;
 
 #pragma pack(1)
-typedef struct query_response_buf_t { // Structure for all ships and all cargo query responses
+typedef struct { // Structure for all ships and all cargo query responses
 	uint8_t messageID; 		// This defines the type of the response
 	am_addr_t senderAddr;
 	am_addr_t shipAddr;

@@ -75,7 +75,7 @@
 typedef struct scmd_t
 {
 	am_addr_t ship_addr;
-	uint8_t ship_cmd;
+	crane_command_t ship_cmd;
 }scmd_t;
 
 static scmd_t cmds[MAX_SHIPS];
@@ -106,12 +106,12 @@ static void commandMsgHandler(void *args);
 static void sendCommandMsg(void *args);
 
 static uint8_t getEmptySlot();
-static uint8_t goToDestination(uint8_t x, uint8_t y);
-static uint8_t parrotShip(am_addr_t sID);
-static uint8_t selectPopular();
-static uint8_t selectCommand(uint8_t x, uint8_t y);
-static uint8_t selectCommandXFirst(uint8_t x, uint8_t y);
-static uint8_t selectCommandYFirst(uint8_t x, uint8_t y);
+static crane_command_t goToDestination(uint8_t x, uint8_t y);
+static crane_command_t parrotShip(am_addr_t sID);
+static crane_command_t selectPopular();
+static crane_command_t selectCommand(uint8_t x, uint8_t y);
+static crane_command_t selectCommandXFirst(uint8_t x, uint8_t y);
+static crane_command_t selectCommandYFirst(uint8_t x, uint8_t y);
 static void clearCmdsBuf();
 
 /**********************************************************************************************
@@ -162,8 +162,8 @@ void initCraneControl(comms_layer_t* radio, am_addr_t addr)
 
 static void craneMainLoop(void *args)
 {
-	static uint8_t cmd = CM_NOTHING_TO_DO;
-	uint8_t  stat;
+	static crane_command_t cmd = CM_NOTHING_TO_DO;
+	cargo_status_t  stat;
 	cmd_sel_tactic_t tt;
 	uint32_t time_left, ticks;
 	am_addr_t addr;
@@ -194,7 +194,7 @@ static void craneMainLoop(void *args)
 				case cc_to_address :		// Call crane to specified ship and place cargo.
 
 					stat = getCargoStatus(addr);
-					if(stat == 1)
+					if(stat == cs_cargo_not_received)
 					{
 						loc = getShipLocation(addr);
 						cmd = goToDestination(loc.x, loc.y);
@@ -205,7 +205,7 @@ static void craneMainLoop(void *args)
 				case cc_to_location :		// Call crane to specified location and place cargo.
 
 					stat = getCargoStatus(getShipAddr(loc));
-					if(stat == 1)
+					if(stat == cs_cargo_not_received)
 					{
 						cmd = goToDestination(loc.x, loc.y);
 					}
@@ -233,7 +233,7 @@ static void craneMainLoop(void *args)
 			{
 				packet.messageID = CRANE_COMMAND_MSG;
 				packet.senderAddr = my_address;
-				packet.cmd = cmd;
+				packet.cmd = (uint8_t) cmd;
 				osMessageQueuePut(smsg_qID, &packet, 0, 0);
 			}
 			else ; // Nothing to do.
@@ -329,7 +329,7 @@ static void commandMsgHandler(void *args)
 			{
 				if(cmds[i].ship_addr == ntoh16(packet.senderAddr))
 				{
-					cmds[i].ship_cmd = packet.cmd;
+					cmds[i].ship_cmd = (crane_command_t) packet.cmd;
 					break;
 				}
 			}
@@ -339,7 +339,7 @@ static void commandMsgHandler(void *args)
 				if(i<MAX_SHIPS)
 				{
 					cmds[i].ship_addr = ntoh16(packet.senderAddr);
-					cmds[i].ship_cmd = packet.cmd;
+					cmds[i].ship_cmd = (crane_command_t) packet.cmd;
 				}
 				else ; // Drop this ships command, cuz no room
 			}
@@ -494,9 +494,9 @@ cmd_sel_tactic_t getCraneTactics(am_addr_t *ship_addr, loc_bundle_t *loc)
 // Selects an appropriate command to get the crane to location (x; y)
 // Takes into account 'Xfirst' and 'alwaysPlaceCargo' choices.
 // This function can return CM_NOTHING_TO_DO in some cases
-static uint8_t goToDestination(uint8_t x, uint8_t y)
+static crane_command_t goToDestination(uint8_t x, uint8_t y)
 {
-	uint8_t cmd;
+	crane_command_t cmd;
 	while(osMutexAcquire(cloc_mutex, 1000) != osOK);
 	if(x != 0 && y != 0)cmd = selectCommand(x, y);
 	osMutexRelease(cloc_mutex);
@@ -507,9 +507,9 @@ static uint8_t goToDestination(uint8_t x, uint8_t y)
 // If no such ship or no command, returns CM_NOTHING_TO_DO.
 // This tactic can work only if other ships send their 
 // crane command messages as broadcast. 
-static uint8_t parrotShip(am_addr_t sID)
+static crane_command_t parrotShip(am_addr_t sID)
 {
-	uint8_t cmd, i;
+	crane_command_t cmd, i;
 
 	cmd = CM_NOTHING_TO_DO;
 
@@ -532,7 +532,7 @@ static uint8_t parrotShip(am_addr_t sID)
 // If no ship or commands, returns CM_NOTHING_TO_DO.
 // This tactic can work only if other ships send their 
 // crane command messages as broadcast. 
-static uint8_t selectPopular()
+static crane_command_t selectPopular()
 {
 	uint8_t i, n;
 	uint8_t cmd[7];
@@ -577,7 +577,7 @@ static uint8_t selectPopular()
 
 	// This favors the first most popular choice.
 	n=0;
-	cmd[0] = CM_NOTHING_TO_DO;
+	cmd[0] = (uint8_t) CM_NOTHING_TO_DO;
 	for(i=1;i<7;i++)if(n < cmd[i])
 	{
 		n = cmd[i];
@@ -587,9 +587,10 @@ static uint8_t selectPopular()
 	return cmd[0];
 }
 
-static uint8_t selectCommand(uint8_t x, uint8_t y)
+static crane_command_t selectCommand(uint8_t x, uint8_t y)
 {
-	uint8_t len = 0, i, stat;
+	uint8_t len = 0, i;
+	cargo_status_t stat;
 	bool x_first, placeCargo;
 	am_addr_t ships[MAX_SHIPS];
 	loc_bundle_t sloc;
@@ -616,7 +617,7 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 					if(distToCrane(sloc) == 0)
 					{
 						stat = getCargoStatus(ships[i]);
-						if(stat != 0)return CM_PLACE_CARGO; // Ship here, no cargo.
+						if(stat != cs_cargo_received)return CM_PLACE_CARGO; // Ship here, no cargo.
 						else break; // Ship here, has cargo.
 					}
 				}
@@ -635,7 +636,7 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 	else return selectCommandYFirst(x, y);
 }
 
-static uint8_t selectCommandYFirst(uint8_t x, uint8_t y)
+static crane_command_t selectCommandYFirst(uint8_t x, uint8_t y)
 {
 	if(y > cloc.crane_y)return CM_UP;
 	else if(y < cloc.crane_y)return CM_DOWN;
@@ -652,7 +653,7 @@ static uint8_t selectCommandYFirst(uint8_t x, uint8_t y)
 	else return CM_PLACE_CARGO;
 }
 
-static uint8_t selectCommandXFirst(uint8_t x, uint8_t y)
+static crane_command_t selectCommandXFirst(uint8_t x, uint8_t y)
 {
 	if(x > cloc.crane_x)return CM_RIGHT;
 	else if(x < cloc.crane_x)return CM_LEFT;

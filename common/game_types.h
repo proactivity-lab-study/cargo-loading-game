@@ -29,7 +29,7 @@
 #define	SYSTEM_ADDR CRANE_ADDR
 
 //-------- CRANE COMMANDS
-enum
+typedef enum
 {
 	CM_UP 					= 1,
 	CM_DOWN 				= 2,
@@ -38,7 +38,7 @@ enum
 	CM_PLACE_CARGO 			= 5,
 	CM_CURRENT_LOCATION		= 6,
 	CM_NOTHING_TO_DO 		= 7
-};
+} crane_command_t;
 
 #define CRANE_UPDATE_INTERVAL 3UL // Seconds
 #define MAX_SHIPS 10 // Maximum number of ships in game
@@ -52,16 +52,15 @@ enum
 #define MAX_LOADING_TIME 600 	// Seconds
 #define DEFAULT_LOC 13
 
-typedef struct loc_bundle_t {
+typedef struct {
 	uint8_t x;
 	uint8_t y;
-}loc_bundle_t;
+} loc_bundle_t;
 
-typedef struct crane_location_t
-{
+typedef struct {
 	uint8_t crane_x;
 	uint8_t crane_y;
 	bool cargo_here;
-}crane_location_t;
+} crane_location_t;
 
 #endif //GAME_TYPES_H

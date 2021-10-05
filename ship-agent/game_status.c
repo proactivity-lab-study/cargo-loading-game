@@ -66,7 +66,7 @@
 #define GS_UPDATE_INTERVAL 60 				// Update game state, seconds
 #define GS_WELCOME_MSG_RETRY_INTERVAL 10 	// Retry welcome message, seconds
 
-typedef struct ship_data_t{
+typedef struct {
 	bool ship_in_game;
 	am_addr_t ship_addr; 
 	uint16_t ship_deadline;
@@ -229,7 +229,6 @@ void systemReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* us
 	query_response_buf_t * bpacket;
 	query_msg_t packet2;
 	
-	//TODO maybe put this all in a separate task, to make this interrupt handler faster
 	switch(rmsg[0])
 	{
 		// New ship, trigger make ship quiery
@@ -363,7 +362,6 @@ static void sendMsgLoop(void *args)
  **********************************************************************************************/
 
 // Returns location of ship, if no such ship, returns 0 for both coordinates.
-// This function can block.
 loc_bundle_t getShipLocation(am_addr_t ship_addr)
 {
 	loc_bundle_t sloc;
@@ -382,7 +380,6 @@ loc_bundle_t getShipLocation(am_addr_t ship_addr)
 }
 
 // Returns address of ship in location 'sloc' or 0 if no ship in this location.
-// This function can block.
 am_addr_t getShipAddr(loc_bundle_t sloc)
 {
 	am_addr_t addr = 0;
@@ -404,7 +401,6 @@ am_addr_t getShipAddr(loc_bundle_t sloc)
 // Fills buffer pointed to by 'saddr' with addresses of all ships currently known.
 // Own address is included.
 // Returns number of ships added to buffer 'saddr'.
-// This function can block.
 uint8_t getAllShipsAddr(am_addr_t saddr[], uint8_t mlen)
 {
 	uint8_t i, len = 0;
@@ -420,7 +416,6 @@ uint8_t getAllShipsAddr(am_addr_t saddr[], uint8_t mlen)
 
 // Marks cargo status as true for ship with address 'addr', if such a ship is found.
 // Use with care! There is no revers command to mark cargo status false.
-// This function can block.
 void markCargo(am_addr_t addr)
 {
 	uint8_t i;
@@ -437,23 +432,22 @@ void markCargo(am_addr_t addr)
 }
 
 // Returns cargo status of ship 'ship_addr'. Possible return values:
-// 0 - cargo has been received, cargo present
-// 1 - cargo has not been received, cargo not present
-// 2 - ship not in database, unknown ship
-// This function can block.
-uint8_t getCargoStatus(am_addr_t ship_addr)
+// cs_cargo_received - cargo has been received, cargo present
+// cs_cargo_not_received - cargo has not been received, cargo not present
+// cs_unknown_ship_addr - ship not in database, unknown ship
+cargo_status_t getCargoStatus(am_addr_t ship_addr)
 {
-	uint8_t i, stat = 2;
+	uint8_t i;
+	cargo_status_t stat = cs_unknown_ship_addr;
 	while(osMutexAcquire(sddb_mutex, 1000) != osOK);
 	for(i=0;i<MAX_SHIPS;i++)if(ships[i].ship_addr == ship_addr && ships[i].ship_in_game)
 	{
-		if(ships[i].is_cargo_loaded)stat = 0;
-		else stat = 1;
+		if(ships[i].is_cargo_loaded)stat = cs_cargo_received;
+		else stat = cs_cargo_not_received;
 	}
 	osMutexRelease(sddb_mutex);
 	return stat;
 }
-
 
 static uint8_t getEmptySlot()
 {
