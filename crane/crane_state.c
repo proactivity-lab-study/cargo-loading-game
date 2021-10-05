@@ -72,7 +72,7 @@
 #define __LOG_LEVEL__ (LOG_LEVEL_crane_state & BASE_LOG_LEVEL)
 #include "log.h"
 
-static uint8_t cmd_buf[MAX_SHIPS]; // Buffer to store received commands
+static crane_command_t cmd_buf[MAX_SHIPS]; // Buffer to store received commands
 static crane_location_t cloc;
 
 static osMutexId_t cmdb_mutex, cloc_mutex;
@@ -87,8 +87,8 @@ static void incomingMsgHandler(void *args);
 static void craneMainLoop(void *args);
 static void sendLocationMsg(void *args);
 
-static uint8_t getWinningCmd();
-static void doCommand(uint8_t wcmd);
+static crane_command_t getWinningCmd();
+static void doCommand(crane_command_t wcmd);
 static uint32_t randomNumber(uint32_t rndL, uint32_t rndH);
 
 /**********************************************************************************************
@@ -107,7 +107,7 @@ void initCrane(comms_layer_t* radio, am_addr_t my_addr)
 	
 	// Initialise buffer
 	while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
-	for(i=0;i<MAX_SHIPS;i++)cmd_buf[i] = 0;
+	for(i=0;i<MAX_SHIPS;i++)cmd_buf[i] = CM_NO_COMMAND;
 	osMutexRelease(cmdb_mutex);
 
 	cradio = radio;
@@ -144,7 +144,7 @@ void initCraneLoc()
 
 static void craneMainLoop(void *args)
 {
-	uint8_t wcmd;
+	crane_command_t wcmd;
 	static crane_location_msg_t sloc;
 	const uint32_t delay_ticks = (uint32_t)CRANE_UPDATE_INTERVAL * osKernelGetTickFreq();
 	for(;;)
@@ -186,7 +186,8 @@ void craneReceiveMessage (comms_layer_t* comms, const comms_msg_t* msg, void* us
 
 static void incomingMsgHandler(void *args)
 {
-	uint8_t index, cmd;
+	uint8_t index;
+	crane_command_t cmd;
 	crane_location_msg_t sloc;
 	crane_command_msg_t packet;
 
@@ -239,7 +240,7 @@ static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_
 
     logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snt %u", result);
 	while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
-	for(i=0;i<MAX_SHIPS;i++)cmd_buf[i] = 0; // Clearing buffer for next round
+	for(i=0;i<MAX_SHIPS;i++)cmd_buf[i] = CM_NO_COMMAND; // Clearing buffer for next round
 	osMutexRelease(cmdb_mutex);	
 
 	osThreadFlagsSet(snd_task_id, 0x00000001U);
@@ -284,7 +285,8 @@ static void sendLocationMsg(void *args)
 
 static uint8_t getWinningCmd()
 {
-	uint8_t votes[MAX_SHIPS], i, rnd, mcount, max, wcmd;
+	uint8_t votes[MAX_SHIPS], i, rnd, mcount, max;
+	crane_command_t wcmd;
 	bool atLeastOne = false;
 
 	for(i=0;i<6;i++)votes[i] = 0;
@@ -293,12 +295,12 @@ static uint8_t getWinningCmd()
 	while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
 	for(i=0;i<MAX_SHIPS;i++)
 	{
-		if(cmd_buf[i] != 0)
+		if(cmd_buf[i] != CM_NO_COMMAND)
 		{
-			votes[cmd_buf[i]]++;
+			votes[(uint8_t)cmd_buf[i]]++;
 			atLeastOne = true;
 		}
-		cmd_buf[i] = 0; // Clear command buffer
+		cmd_buf[i] = CM_NO_COMMAND; // Clear command buffer
 	}
 	osMutexRelease(cmdb_mutex);
 
@@ -337,7 +339,7 @@ static uint8_t getWinningCmd()
 	return wcmd;
 }
 
-static void doCommand(uint8_t wcmd)
+static void doCommand(crane_command_t wcmd)
 {
 	static am_addr_t saddr;
 	cloc.cargo_here = false;

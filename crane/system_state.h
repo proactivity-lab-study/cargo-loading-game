@@ -9,7 +9,7 @@
 #define SYSTEM_STATE_H_
 
 // Ship database
-typedef struct sdb_t {
+typedef struct {
 	bool shipInGame;
 	am_addr_t shipAddr;
 	uint8_t x_coordinate;

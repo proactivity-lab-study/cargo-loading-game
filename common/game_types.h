@@ -31,6 +31,7 @@
 //-------- CRANE COMMANDS
 typedef enum
 {
+    CM_NO_COMMAND           = 0,
 	CM_UP 					= 1,
 	CM_DOWN 				= 2,
 	CM_LEFT 				= 3,

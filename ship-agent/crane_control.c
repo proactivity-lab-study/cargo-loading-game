@@ -692,7 +692,7 @@ static void clearCmdsBuf()
 	for(i=0;i<MAX_SHIPS;i++)
 	{
 		cmds[i].ship_addr = 0;
-		cmds[i].ship_cmd = 0;
+		cmds[i].ship_cmd = CM_NO_COMMAND;
 	}
 	osMutexRelease(cmdb_mutex);
 }
