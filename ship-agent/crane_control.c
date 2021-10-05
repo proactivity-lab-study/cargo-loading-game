@@ -5,7 +5,7 @@
  * sent by other ship-agents and keeps track of their commands. All sorts of
  * different crane control tactics are implemented here.
  * 
- * Main functionality of this module is:
+ * Main functionality of this module is :
  * 
  * - keep track of crane update interval and possibly issue commands each interval
  * - send control command messages to crane-agent
@@ -86,7 +86,7 @@ static crane_location_t cloc;
 static bool Xfirst = true; // Which coordinate to use first, x is default
 static bool alwaysPlaceCargo = true; // Always send 'place cargo' command when crane is on top of a ship
 
-static uint8_t tactic;
+static cmd_sel_tactic_t tactic;
 static am_addr_t tactic_addr;
 static loc_bundle_t tactic_loc;
 
@@ -163,7 +163,8 @@ void initCraneControl(comms_layer_t* radio, am_addr_t addr)
 static void craneMainLoop(void *args)
 {
 	static uint8_t cmd = CM_NOTHING_TO_DO;
-	uint8_t  stat, tt;
+	uint8_t  stat;
+	cmd_sel_tactic_t tt;
 	uint32_t time_left, ticks;
 	am_addr_t addr;
 	loc_bundle_t loc;
@@ -185,12 +186,12 @@ static void craneMainLoop(void *args)
 
 			switch(tt)
 			{
-				case cc_do_nothing : 		// Don't send crane control command messages
+				case cc_do_nothing : 		// Don't send crane control command messages.
 
 					cmd = CM_NOTHING_TO_DO;
 					break;
 
-				case cc_to_address :		// Call crane to specified ship and place cargo
+				case cc_to_address :		// Call crane to specified ship and place cargo.
 
 					stat = getCargoStatus(addr);
 					if(stat == 1)
@@ -198,37 +199,27 @@ static void craneMainLoop(void *args)
 						loc = getShipLocation(addr);
 						cmd = goToDestination(loc.x, loc.y);
 					}
-					else cmd = CM_NOTHING_TO_DO; // Nothing to do, cuz cargo placed or no such ship
+					else cmd = CM_NOTHING_TO_DO; // Nothing to do, cuz cargo placed or no such ship.
 					break;
 
-				case cc_to_location :		// Call crane to specified location and place cargo
+				case cc_to_location :		// Call crane to specified location and place cargo.
 
 					stat = getCargoStatus(getShipAddr(loc));
 					if(stat == 1)
 					{
 						cmd = goToDestination(loc.x, loc.y);
 					}
-					else cmd = CM_NOTHING_TO_DO; // Nothing to do, cuz cargo placed or no such ship
+					else cmd = CM_NOTHING_TO_DO; // Nothing to do, cuz cargo placed or no such ship.
 					break;
 
-				case cc_parrot_ship :		// Send same command message as specified ship
+				case cc_parrot_ship :		// Send same command message as specified ship.
 
-					stat = getCargoStatus(addr);
-					if(stat == 1)
-					{
-						cmd = parrotShip(addr);
-					}
-					else cmd = CM_NOTHING_TO_DO; // Nothing to do, cuz cargo placed or no such ship
+					cmd = parrotShip(addr);
 					break;
 
-				case cc_popular_command	:	// Send the command that is currently most popular
+				case cc_popular_command	:	// Send the command that is currently most popular.
 
-					stat = getCargoStatus(addr);
-					if(stat == 1)
-					{
-						cmd = selectPopular(addr);
-					}
-					else cmd = CM_NOTHING_TO_DO; // Nothing to do, cuz cargo placed or no such ship
+					cmd = selectPopular();
 					break;
 
 				default :
@@ -245,7 +236,7 @@ static void craneMainLoop(void *args)
 				packet.cmd = cmd;
 				osMessageQueuePut(smsg_qID, &packet, 0, 0);
 			}
-			else ; // Nothing to do
+			else ; // Nothing to do.
 		}
 		else ; // There is still time until crane update event, wait!
 	}
@@ -404,7 +395,7 @@ static void sendCommandMsg(void *args)
 
 // Sets whether crane is commanded to move along x coordinate first or along y coordinate first.
 // Used with tactic 'cc_to_address' and 'cc_to_location'.
-// This function can block.
+
 void setXFirst(bool val)
 {
 	static bool v;
@@ -417,7 +408,7 @@ void setXFirst(bool val)
 
 // Returns whether crane is commanded to move along x coordinate first or along y coordinate first.
 // Used with tactic 'cc_to_address' and 'cc_to_location'.
-// This function can block.
+
 bool getXFirst()
 {
 	bool val;
@@ -433,7 +424,7 @@ bool getXFirst()
 // Setting 'true' results in always issuing place cargo commend when crane is at some ship location.
 // Setting 'false' results in placing cargo only at location designated by chosen tactics.
 // Used with tactic 'cc_to_address' and 'cc_to_location'.
-// This function can block.
+
 void setAlwaysPlaceCargo(bool val)
 {
 	static bool v;
@@ -448,7 +439,7 @@ void setAlwaysPlaceCargo(bool val)
 // If 'true' cargo is placed on always when crane is at some ship location.
 // If 'false' cargo is only placed at location designated by chosen tactics.
 // Used with tactic 'cc_to_address' and 'cc_to_location'.
-// This function can block.
+
 bool getAlwaysPlaceCargo()
 {
 	bool val;
@@ -460,14 +451,14 @@ bool getAlwaysPlaceCargo()
 	return val;
 }
 
-// Sets tactical choise for crane command selection.
+// Sets tactical choice for crane command selection.
 // Possible choices are defined in crane_control.h
 // Currently these are 'cc_do_nothing', 'cc_to_address', 'cc_to_location', 'cc_parrot_ship'
 // and 'cc_popular_command'.
-// This function can block.
-void setCraneTactics(uint8_t tt, am_addr_t ship_addr, loc_bundle_t loc)
+
+void setCraneTactics(cmd_sel_tactic_t tt, am_addr_t ship_addr, loc_bundle_t loc)
 {
-	static uint8_t tact;
+	static cmd_sel_tactic_t tact;
 	tact = tt;
 	while(osMutexAcquire(cctt_mutex, 1000) != osOK);
 	tactic = tt;
@@ -481,10 +472,10 @@ void setCraneTactics(uint8_t tt, am_addr_t ship_addr, loc_bundle_t loc)
 // Possible return values are defined in crane_control.h
 // Currently these are 'cc_do_nothing', 'cc_to_address', 'cc_to_location', 'cc_parrot_ship'
 // and 'cc_popular_command'.
-// This function can block.
-uint8_t getCraneTactics(am_addr_t *ship_addr, loc_bundle_t *loc)
+
+cmd_sel_tactic_t getCraneTactics(am_addr_t *ship_addr, loc_bundle_t *loc)
 {
-	uint8_t tt;
+	cmd_sel_tactic_t tt;
 	static am_addr_t addr;
 	static loc_bundle_t l;
 	
@@ -546,7 +537,7 @@ static uint8_t selectPopular()
 	uint8_t i, n;
 	uint8_t cmd[7];
 
-	// Empty the buffer
+	// Empty the buffer.
 	for(i=0;i<7;i++)cmd[i] = 0;
 
 	while(osMutexAcquire(cmdb_mutex, 1000) != osOK);
@@ -584,13 +575,13 @@ static uint8_t selectPopular()
 	}
 	osMutexRelease(cmdb_mutex);
 
-	// This favors the first most popular choice
+	// This favors the first most popular choice.
 	n=0;
 	cmd[0] = CM_NOTHING_TO_DO;
 	for(i=1;i<7;i++)if(n < cmd[i])
 	{
 		n = cmd[i];
-		cmd[0] = i; // Using the 0 index memory area for this, because it is available
+		cmd[0] = i; // Using the 0 index memory area for this, because it is available.
 	}
 	
 	return cmd[0];
@@ -608,7 +599,7 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 	placeCargo = alwaysPlaceCargo;
 	osMutexRelease(cctt_mutex);
 
-	// First check if cargo was placed in the last round, if not, maybe we need to
+	// First check if cargo was placed in the last round, if not, maybe we need to.
 	if(!cloc.cargo_here)
 	{
 		// There is no cargo in this place, is there a ship here and do we need to place cargo?
@@ -621,24 +612,24 @@ static uint8_t selectCommand(uint8_t x, uint8_t y)
 				for(i=0;i<len;i++)
 				{
 					sloc = getShipLocation(ships[i]);
-					// If there is a ship here, then only reasonable command is place cargo
+					// If there is a ship here, then only reasonable command is place cargo.
 					if(distToCrane(sloc) == 0)
 					{
 						stat = getCargoStatus(ships[i]);
-						if(stat != 0)return CM_PLACE_CARGO; // Ship here, no cargo
-						else break; // Ship here, has cargo
+						if(stat != 0)return CM_PLACE_CARGO; // Ship here, no cargo.
+						else break; // Ship here, has cargo.
 					}
 				}
 			}
-			else ; // No more ships in game besides me
+			else ; // No more ships in game besides me.
 
 			// If I reach here, then there are no ships besides me in the game
 			// or there are more ships but no one is at the current crane location.
 			// Therefor just continue with the strategy.
 		}
-		else ; // Don't care about cargo placement unless it serves my strategy
+		else ; // Don't care about cargo placement unless it serves my strategy.
 	}
-	else ; // Cargo was placed by the crane in the last round, so no need to place it again this round
+	else ; // Cargo was placed by the crane in the last round, so no need to place it again this round.
 
 	if(x_first)return selectCommandXFirst(x, y);
 	else return selectCommandYFirst(x, y);
@@ -683,7 +674,7 @@ static uint8_t selectCommandXFirst(uint8_t x, uint8_t y)
  **********************************************************************************************/
 
 // Returns distance to crane, zero distance means crane is at location (x; y).
-// This function can block.
+
 uint16_t distToCrane(loc_bundle_t loc)
 {
 	static uint16_t dist;
