@@ -33,7 +33,23 @@ typedef struct {            // Template for ship-to-ship message
 	uint16_t val16;			// Use hton16() when sending and ntoh16() when receiving, see endianness.h
 	uint32_t val32;			// Use hton32() when sending and ntoh32() when receiving, see endianness.h
 	float valf;				// Use htonf() when sending and ntohf() when receiving, see endianness.h
-} ship_msg_t;
+} ship_msg_template_t;
+
+// 'Next command' message 
+#pragma pack(1)
+typedef struct {
+	uint8_t messageID;
+	am_addr_t senderAddr;
+	uint8_t cmd;			
+} ship_next_cmd_msg_t;
+
+// 'Next ship' message 
+#pragma pack(1)
+typedef struct {
+	uint8_t messageID;
+	am_addr_t senderAddr;
+	am_addr_t nextShip;			
+} ship_next_ship_msg_t;
 
 //-------- CRANE MESSAGE STRUCTURES
 
