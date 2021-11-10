@@ -283,6 +283,18 @@ static void sendLocationMsg(void *args)
  *	Utility functions
  **********************************************************************************************/
 
+loc_bundle_t getCraneLocation ()
+{
+    loc_bundle_t crane_loc;
+    
+	while(osMutexAcquire(cloc_mutex, 1000) != osOK);
+	crane_loc.y = cloc.crane_y;
+	crane_loc.x = cloc.crane_x;
+	osMutexRelease(cloc_mutex);
+	
+	return crane_loc;
+}
+
 static uint8_t getWinningCmd()
 {
 	uint8_t votes[MAX_SHIPS], i, rnd, mcount, max;

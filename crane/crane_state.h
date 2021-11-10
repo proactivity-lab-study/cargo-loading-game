@@ -26,5 +26,6 @@ void craneReceiveMessage (comms_layer_t* comms, const comms_msg_t* msg, void* us
  *	Utility functions
  **********************************************************************************************/
 
+loc_bundle_t getCraneLocation();
 
 #endif //CRANE_STATE_H_

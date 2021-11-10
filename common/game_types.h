@@ -44,14 +44,14 @@ typedef enum
 #define CRANE_UPDATE_INTERVAL 3UL // Seconds
 #define MAX_SHIPS 10 // Maximum number of ships in game
 
-#define GRID_LOWER_BOUND 2 	// Including - grid lower bound should be > 0
-#define GRID_UPPER_BOUND 30 // Including - grid upper bound should be < 255
+#define GRID_LOWER_BOUND 1 	// Including - grid lower bound should be > 0
+#define GRID_UPPER_BOUND 45 // Including - grid upper bound should be < 255
 
-#define DURATION_OF_GAME 900UL 	// Seconds
+#define DURATION_OF_GAME 900UL 	// Seconds - depricated, don't use any more
 #define DEFAULT_TIME 300 		// Seconds
-#define MIN_LOADING_TIME 150 	// Seconds
-#define MAX_LOADING_TIME 600 	// Seconds
-#define DEFAULT_LOC 13
+#define MIN_LOADING_TIME 150 	// Seconds - depricated, don't use any more
+#define MAX_LOADING_TIME 600 	// Seconds - depricated, don't use any more
+#define DEFAULT_LOC 0
 
 typedef struct {
 	uint8_t x;

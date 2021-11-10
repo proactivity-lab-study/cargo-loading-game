@@ -34,6 +34,7 @@
  * 		so in this regard it is redundant. Suggested for removal.
  * 
  * TODO Mechanism to leave the game.
+ * TODO get rid of magic numbers.
  * 
  * Copyright Proactivity Lab 2020
  *
@@ -90,9 +91,17 @@ static uint32_t randomNumber(uint32_t rndL, uint32_t rndH);
 
 static void initGame()
 {
+    static uint32_t max_dist, min_g_time, max_g_time, game_duration;
+    
 	srand(osKernelGetTickCount()); // Initialise random number generator
+	
 	initCraneLoc(); // Crane location
-	global_load_deadline = osKernelGetTickCount() + (DURATION_OF_GAME - 1) * osKernelGetTickFreq();
+	
+	max_dist = GRID_UPPER_BOUND - GRID_LOWER_BOUND;
+	min_g_time = 2 * max_dist * CRANE_UPDATE_INTERVAL; //TODO magic numbers!
+	max_g_time = 3 * max_dist * CRANE_UPDATE_INTERVAL; //TODO magic numbers!
+	game_duration = randomNumber(min_g_time, max_g_time);
+	global_load_deadline = osKernelGetTickCount() + game_duration * osKernelGetTickFreq();
 	info1("Game time: %lu s", (uint32_t)((global_load_deadline - osKernelGetTickCount()) / osKernelGetTickFreq()));
 }
 
@@ -401,27 +410,33 @@ static uint8_t registerNewShip(am_addr_t shipAddr)
 static void genNewCoordinates(uint8_t index)
 {
 	uint8_t k;
-	uint8_t xloc, yloc;
+	uint32_t xloc, yloc, dist;
 
 	for(;;)
 	{
 		xloc = randomNumber(GRID_LOWER_BOUND, GRID_UPPER_BOUND);
 		yloc = randomNumber(GRID_LOWER_BOUND, GRID_UPPER_BOUND);
 
-		// Check that no other ship is in this location
-		for(k=0;k<MAX_SHIPS;k++)
-		{
-			if(ship_db[k].shipInGame)
-			{
-				if(ship_db[k].x_coordinate == xloc && ship_db[k].y_coordinate == yloc)
-				{
-					break ; // Found a matching ship, get new coordinates
-				}
-			}
-		}
+        dist = distToCrane(xloc, yloc);
+        if(dist >= 10 && dist <= 25) //TODO get rid of magic numbers.
+        {
 
-		if(k>=MAX_SHIPS)break; // Unique coordinates, break loop
-		else ; // Another ship already in this location, do loop again
+		    // Check that no other ship is in this location
+		    for(k=0;k<MAX_SHIPS;k++)
+		    {
+			    if(ship_db[k].shipInGame)
+			    {
+				    if(ship_db[k].x_coordinate == xloc && ship_db[k].y_coordinate == yloc)
+				    {
+					    break ; // Found a matching ship, get new coordinates
+				    }
+			    }
+		    }
+
+		    if(k>=MAX_SHIPS)break; // Unique coordinates, break loop
+		    else ; // Another ship already in this location, do loop again
+		}
+		else ; // Too close to crane or too far from crane, do loop again
 	}
 
 	ship_db[index].x_coordinate = xloc;
@@ -430,10 +445,15 @@ static void genNewCoordinates(uint8_t index)
 
 static void genLoadTime(uint8_t index)
 {
-	//TODO: MIN-MAX need to be set somehow in relation to ship-crane distance
-	uint32_t ldkt;
+	//TODO magic numbers!
+	uint32_t ldkt, dist, min_d_time, max_d_time;
 
-	ldkt = randomNumber(MIN_LOADING_TIME, MAX_LOADING_TIME) * osKernelGetTickFreq();
+    dist = distToCrane(ship_db[index].x_coordinate, ship_db[index].y_coordinate);
+    
+    min_d_time = 3 * dist * CRANE_UPDATE_INTERVAL;
+    max_d_time = 4 * dist * CRANE_UPDATE_INTERVAL;
+    	
+	ldkt = randomNumber(min_d_time, max_d_time) * osKernelGetTickFreq();
 	ldkt += osKernelGetTickCount();
 
 	if(ldkt > global_load_deadline)ldkt = global_load_deadline; // Sry, your time is cut short
@@ -477,4 +497,13 @@ static uint32_t randomNumber(uint32_t rndL, uint32_t rndH)
 {
 	uint32_t range = rndH + 1 - rndL;
 	return rand() % range + rndL;
+}
+
+static uint32_t distToCrane(uint32_t x, uint32_t y)
+{
+	static uint16_t dist;
+	loc_bundle_t cloc;
+    cloc = getCraneLocation();
+	dist = abs(cloc.x - x) + abs(cloc.y - y);
+	return dist;
 }
