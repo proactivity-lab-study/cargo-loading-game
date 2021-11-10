@@ -1,0 +1,766 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="285.17126mm"
+   height="272.69611mm"
+   viewBox="0 0 1010.4493 966.24604"
+   id="svg2"
+   version="1.1"
+   inkscape:version="1.1.1 (1:1.1+202109281949+c3084ef5ed)"
+   sodipodi:docname="func_diag_API.svg"
+   inkscape:export-filename="/home/joh/Dokumendid/doktuurium/õppetegevus/proact/assignments/multi_agent_game/func_diag.svg.png"
+   inkscape:export-xdpi="300"
+   inkscape:export-ydpi="300"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <defs
+     id="defs4">
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="marker10336"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lend">
+      <path
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path10338"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="marker10182"
+       style="overflow:visible"
+       inkscape:isstock="true">
+      <path
+         id="path10184"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="marker10046"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lstart">
+      <path
+         transform="matrix(0.8,0,0,0.8,10,0)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path10048"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="marker9922"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lstart">
+      <path
+         transform="matrix(0.8,0,0,0.8,10,0)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path9924"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lstart"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Lstart"
+       style="overflow:visible"
+       inkscape:isstock="true">
+      <path
+         id="path4776"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(0.8,0,0,0.8,10,0)"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lstart"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Lstart-1"
+       style="overflow:visible"
+       inkscape:isstock="true">
+      <path
+         inkscape:connector-curvature="0"
+         id="path4776-9"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(0.8,0,0,0.8,10,0)" />
+    </marker>
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.98994949"
+     inkscape:cx="347.49248"
+     inkscape:cy="565.18035"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     showguides="false"
+     inkscape:window-width="2560"
+     inkscape:window-height="1403"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     fit-margin-top="5"
+     fit-margin-right="5"
+     fit-margin-left="5"
+     fit-margin-bottom="5"
+     inkscape:snap-global="true"
+     inkscape:pagecheckerboard="0"
+     inkscape:snap-intersection-paths="true"
+     inkscape:snap-midpoints="true" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-664.02666,471.89119)">
+    <g
+       id="g328476"
+       transform="translate(749.38807,-92.082318)">
+      <rect
+         style="opacity:1;fill:#e9ddaf;fill-opacity:1;stroke:#000000;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4187-22"
+         width="803.33405"
+         height="101.20262"
+         x="-24.796234"
+         y="431.02472"
+         ry="15.530498" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         x="376.87445"
+         y="476.57523"
+         id="text4414"><tspan
+           sodipodi:role="line"
+           id="tspan4416"
+           x="376.87445"
+           y="476.57523"
+           style="font-size:15px;line-height:1.25">Radio layer </tspan><tspan
+           sodipodi:role="line"
+           x="376.87445"
+           y="495.32523"
+           id="tspan4418"
+           style="font-size:15px;line-height:1.25">(drivers, physical layer, etc.)</tspan></text>
+    </g>
+    <g
+       id="g321106"
+       transform="translate(-123.049,-421.49669)" />
+    <g
+       id="g552280"
+       transform="translate(32.902396,12.0713)">
+      <rect
+         style="fill:#f4d7d7;fill-opacity:1;stroke:#000000;stroke-width:1.2365;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4136-9-2"
+         width="347.33954"
+         height="284.86426"
+         x="1092.321"
+         y="-59.563816"
+         ry="21.014576"
+         rx="0" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-weight:normal;font-size:17.5px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         x="1171.2832"
+         y="-20.719202"
+         id="text4189-7"><tspan
+           sodipodi:role="line"
+           id="tspan4191-5"
+           x="1171.2832"
+           y="-20.719202"
+           style="font-size:17.5px;line-height:1.25">Crane control module</tspan></text>
+      <rect
+         style="fill:#d4f0fc;fill-opacity:1;stroke:#000000;stroke-width:1.22685;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4136-9-8-9-0"
+         width="317.61124"
+         height="96.747597"
+         x="1107.1851"
+         y="-1.1990701"
+         ry="7.1371169"
+         rx="0" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+         x="1116.8826"
+         y="18.911257"
+         id="text68091-1-6-5"><tspan
+           sodipodi:role="line"
+           style="font-weight:bold;font-size:12.5px;stroke-width:0.9375"
+           x="1116.8826"
+           y="18.911257"
+           id="tspan70097-0-4-9">Threads</tspan><tspan
+           sodipodi:role="line"
+           style="font-size:12.5px;stroke-width:0.9375"
+           x="1116.8826"
+           y="34.536255"
+           id="tspan70099-3-3-4">   - next command (periodic)</tspan><tspan
+           sodipodi:role="line"
+           style="font-size:12.5px;stroke-width:0.9375"
+           x="1116.8826"
+           y="50.161255"
+           id="tspan126439-4-3-6">   - send messages (event based)</tspan><tspan
+           sodipodi:role="line"
+           style="font-size:12.5px;stroke-width:0.9375"
+           x="1116.8826"
+           y="65.786255"
+           id="tspan303540-9">   - handle crane state changes (event based)</tspan><tspan
+           sodipodi:role="line"
+           style="font-size:12.5px;stroke-width:0.9375"
+           x="1116.8826"
+           y="81.411255"
+           id="tspan303542-2">   - handle other ships commands (event based)</tspan></text>
+      <rect
+         style="fill:#d4f0fc;fill-opacity:1;stroke:#000000;stroke-width:1.24509;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4136-9-8-9-8-4"
+         width="300.38724"
+         height="98.794327"
+         x="1115.7972"
+         y="110.19759"
+         ry="7.288105"
+         rx="0" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         x="1128.0609"
+         y="132.95061"
+         id="text4300-9-5-7"><tspan
+           sodipodi:role="line"
+           x="1128.0609"
+           y="132.95061"
+           id="tspan4312-6-7-7"
+           style="font-weight:bold;font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none">Utility functions</tspan><tspan
+           sodipodi:role="line"
+           x="1128.0609"
+           y="148.57561"
+           style="font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+           id="tspan445415-4">   - set/get x, y first</tspan><tspan
+           sodipodi:role="line"
+           x="1128.0609"
+           y="164.20061"
+           style="font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+           id="tspan446725-8">   - set/get always place cargo</tspan><tspan
+           sodipodi:role="line"
+           x="1128.0609"
+           y="179.82561"
+           style="font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+           id="tspan446729-2">   - set/get crane tactics</tspan><tspan
+           sodipodi:role="line"
+           x="1128.0609"
+           y="195.45061"
+           style="font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+           id="tspan476474">   - get crane-to-ship distance</tspan></text>
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+       x="868.19556"
+       y="279.30066"
+       id="text554192-4"><tspan
+         sodipodi:role="line"
+         id="tspan554190-6"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="868.19556"
+         y="279.30066">ship2ShipReceiveMessage ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="868.19556"
+         y="294.92566"
+         id="tspan641502">comms_send ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="868.19556"
+         y="310.55066"
+         id="tspan624832">radioSendDone ()</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+       x="1146.1881"
+       y="279.30066"
+       id="text554192-4-2"><tspan
+         sodipodi:role="line"
+         id="tspan554190-6-5"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1146.1881"
+         y="279.30066">craneReceiveMessage ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1146.1881"
+         y="294.92566"
+         id="tspan643388">comms_send ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1146.1881"
+         y="310.55066"
+         id="tspan626694">radioSendDone ()</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+       x="1350.624"
+       y="279.30066"
+       id="text554192-4-8"><tspan
+         sodipodi:role="line"
+         id="tspan554190-6-6"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1350.624"
+         y="279.30066">systemReceiveMessage ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1350.624"
+         y="294.92566"
+         id="tspan645046">comms_send ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1350.624"
+         y="310.55066"
+         id="tspan628400">radioSendDone ()</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+       x="944.01318"
+       y="93.473274"
+       id="text554192-4-2-4-6"><tspan
+         sodipodi:role="line"
+         id="tspan554190-6-5-7-2"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="944.01318"
+         y="93.473274">setXFirst ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="944.01318"
+         y="109.09827"
+         id="tspan590739">getXFirst ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="944.01318"
+         y="124.72327"
+         id="tspan590741">setAlwaysPlaceCargo ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="944.01318"
+         y="140.34827"
+         id="tspan590743">getAlwaysPlaceCargo ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="944.01318"
+         y="155.97327"
+         id="tspan590745">setCraneTactics ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="944.01318"
+         y="171.59827"
+         id="tspan590747">getCraneTactics ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="944.01318"
+         y="187.22327"
+         id="tspan590749">distToCrane ()</tspan></text>
+    <g
+       id="g647042">
+      <rect
+         style="fill:#d4f0fc;fill-opacity:1;stroke:#000000;stroke-width:1.33995;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4187-2-8"
+         width="301.33484"
+         height="148.09909"
+         x="710.46039"
+         y="-450.01291"
+         ry="22.727205" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         x="811.66736"
+         y="-424.2131"
+         id="text4189-3-8"><tspan
+           sodipodi:role="line"
+           id="tspan4191-7-9"
+           x="811.66736"
+           y="-424.2131"
+           style="font-weight:bold;font-size:15px;line-height:1.25">ship_main.c</tspan></text>
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         x="745.50403"
+         y="-398.35596"
+         id="text4193-5-7"><tspan
+           sodipodi:role="line"
+           x="745.50403"
+           y="-398.35596"
+           id="tspan4601-0"
+           style="font-size:15px;line-height:1.25">Threads</tspan><tspan
+           sodipodi:role="line"
+           x="745.50403"
+           y="-379.60596"
+           style="font-size:15px;line-height:1.25"
+           id="tspan528970">   - 'Heartbeat' (periodic)</tspan><tspan
+           sodipodi:role="line"
+           x="745.50403"
+           y="-360.85596"
+           style="font-size:15px;line-height:1.25"
+           id="tspan528972">Utility functions</tspan><tspan
+           sodipodi:role="line"
+           x="745.50403"
+           y="-342.10596"
+           style="font-size:15px;line-height:1.25"
+           id="tspan528974">   - none</tspan></text>
+    </g>
+    <text
+       id="text4434-3"
+       y="-210.72844"
+       x="881.47064"
+       style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       xml:space="preserve"><tspan
+         y="-210.72844"
+         x="881.47064"
+         id="tspan4436-0"
+         sodipodi:role="line"
+         style="font-size:15px;line-height:1.25"> </tspan></text>
+    <g
+       id="g647064">
+      <rect
+         style="fill:#f4d7d7;fill-opacity:1;stroke:#000000;stroke-width:1.23614;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4136-9-2-9-9"
+         width="329.37289"
+         height="300.228"
+         x="1227.5011"
+         y="-450.06479"
+         ry="22.147964"
+         rx="0" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-weight:normal;font-size:17.5px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         x="1300.8722"
+         y="-413.54999"
+         id="text4189-7-0-6"><tspan
+           sodipodi:role="line"
+           id="tspan4191-5-8-2"
+           x="1300.8722"
+           y="-413.54999"
+           style="font-size:17.5px;line-height:1.25">Game status module</tspan></text>
+      <g
+         id="g452741"
+         transform="translate(-80.473285,-47.475934)">
+        <rect
+           style="fill:#d4f0fc;fill-opacity:1;stroke:#000000;stroke-width:1.30352;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+           id="rect4136-9-8-9-8"
+           width="300.3288"
+           height="108.30578"
+           x="1445.5454"
+           y="196.84146"
+           ry="7.9897695"
+           rx="0"
+           transform="translate(-123.049,-421.49669)" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+           x="1332.7863"
+           y="-205.6153"
+           id="text4300-9-5"><tspan
+             sodipodi:role="line"
+             x="1332.7863"
+             y="-205.6153"
+             id="tspan4312-6-7"
+             style="font-weight:bold;font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none">Utility functions</tspan><tspan
+             sodipodi:role="line"
+             x="1332.7863"
+             y="-189.9903"
+             style="font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+             id="tspan290208">   - get location of ship</tspan><tspan
+             sodipodi:role="line"
+             x="1332.7863"
+             y="-174.3653"
+             style="font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+             id="tspan445415">   - get ship address</tspan><tspan
+             sodipodi:role="line"
+             x="1332.7863"
+             y="-158.7403"
+             style="font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+             id="tspan446725">   - get all ships addresses</tspan><tspan
+             sodipodi:role="line"
+             x="1332.7863"
+             y="-143.1153"
+             style="font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+             id="tspan446727">   - get cargo status of ship</tspan><tspan
+             sodipodi:role="line"
+             x="1332.7863"
+             y="-127.4903"
+             style="font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+             id="tspan446729">   - set cargo status of ship</tspan></text>
+      </g>
+      <g
+         id="g452750"
+         transform="translate(-80.808189,5.5380445)">
+        <rect
+           style="fill:#d4f0fc;fill-opacity:1;stroke:#000000;stroke-width:1.25;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+           id="rect4136-9-8-9"
+           width="300.35153"
+           height="106.2036"
+           x="1322.8199"
+           y="-399.33325"
+           ry="7.8346906"
+           rx="0" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+           x="1332.5059"
+           y="-379.2345"
+           id="text68091-1-6"><tspan
+             sodipodi:role="line"
+             style="font-weight:bold;font-size:12.5px;stroke-width:0.9375"
+             x="1332.5059"
+             y="-379.2345"
+             id="tspan70097-0-4">Threads</tspan><tspan
+             sodipodi:role="line"
+             style="font-size:12.5px;stroke-width:0.9375"
+             x="1332.5059"
+             y="-363.6095"
+             id="tspan70099-3-3">   - enter game (terminated after entry)</tspan><tspan
+             sodipodi:role="line"
+             style="font-size:12.5px;stroke-width:0.9375"
+             x="1332.5059"
+             y="-347.9845"
+             id="tspan126439-4-3">   - send messages (event based)</tspan><tspan
+             sodipodi:role="line"
+             style="font-size:12.5px;stroke-width:0.9375"
+             x="1332.5059"
+             y="-332.3595"
+             id="tspan303540">   - check for new ships (periodic)</tspan><tspan
+             sodipodi:role="line"
+             style="font-size:12.5px;stroke-width:0.9375"
+             x="1332.5059"
+             y="-316.7345"
+             id="tspan303542">   - get data of all ships in game (event based)</tspan></text>
+      </g>
+    </g>
+    <g
+       id="g647080">
+      <rect
+         style="fill:#f4d7d7;fill-opacity:1;stroke:#000000;stroke-width:1.03962;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4136-9-2-9"
+         width="329.02405"
+         height="212.58026"
+         x="695.54547"
+         y="-152.8974"
+         ry="15.68215"
+         rx="0" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-weight:normal;font-size:17.5px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         x="766.01208"
+         y="-110.20435"
+         id="text4189-7-0"><tspan
+           sodipodi:role="line"
+           id="tspan4191-5-8"
+           x="766.01208"
+           y="-110.20435"
+           style="font-size:17.5px;line-height:1.25">Ship strategy module</tspan></text>
+      <g
+         id="g552302"
+         transform="translate(-5.899518,-87.610143)">
+        <rect
+           style="fill:#d4f0fc;fill-opacity:1;stroke:#000000;stroke-width:0.931188;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+           id="rect4136-9-8-9-8-9"
+           width="300.70114"
+           height="55.201736"
+           x="715.60645"
+           y="77.420105"
+           ry="4.0722589"
+           rx="0" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+           x="726.08246"
+           y="96.646202"
+           id="text4300-9-5-3"><tspan
+             sodipodi:role="line"
+             x="726.08246"
+             y="96.646202"
+             id="tspan4312-6-7-6"
+             style="font-weight:bold;font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none">Utility functions</tspan><tspan
+             sodipodi:role="line"
+             x="726.08246"
+             y="104.4587"
+             style="font-size:12.5px;line-height:1.25;stroke-width:1;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+             id="tspan446729-0" /></text>
+      </g>
+      <g
+         id="g552296"
+         transform="translate(-6.085339,-87.610143)">
+        <rect
+           style="fill:#d4f0fc;fill-opacity:1;stroke:#000000;stroke-width:1.04108;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+           id="rect4136-9-8-9-1"
+           width="300.56046"
+           height="73.617203"
+           x="715.86261"
+           y="-7.491035"
+           ry="5.4307766"
+           rx="0" />
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+           x="725.35205"
+           y="16.550543"
+           id="text68091-1-6-1"><tspan
+             sodipodi:role="line"
+             style="font-weight:bold;font-size:12.5px;stroke-width:0.9375"
+             x="725.35205"
+             y="16.550543"
+             id="tspan70097-0-4-0">Threads</tspan><tspan
+             sodipodi:role="line"
+             style="font-size:12.5px;stroke-width:0.9375"
+             x="725.35205"
+             y="32.175545"
+             id="tspan70099-3-3-8">   - strategy evaluation (periodic)</tspan><tspan
+             sodipodi:role="line"
+             style="font-size:12.5px;stroke-width:0.9375"
+             x="725.35205"
+             y="47.800545"
+             id="tspan303542-6">   - send messages (event based)</tspan></text>
+      </g>
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+       x="1036.1417"
+       y="-383.68533"
+       id="text554192-4-2-2"><tspan
+         sodipodi:role="line"
+         id="tspan554190-6-5-8"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1036.1417"
+         y="-383.68533">initSystemStatus ()</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+       x="1002.1439"
+       y="-237.98917"
+       id="text554192-4-2-4"><tspan
+         sodipodi:role="line"
+         id="tspan554190-6-5-7"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1002.1439"
+         y="-237.98917">initCraneControl ()</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+       x="768.36292"
+       y="-222.47087"
+       id="text554192-4-2-24"><tspan
+         sodipodi:role="line"
+         id="tspan554190-6-5-0"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="768.36292"
+         y="-222.47087">initShipStrategy ()</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+       x="1088.0245"
+       y="-181.46107"
+       id="text554192-4-2-4-6-9"><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1088.0245"
+         y="-181.46107"
+         id="tspan590749-1">getShipLocation ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1088.0245"
+         y="-165.83607"
+         id="tspan610629">getShipAddr ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1088.0245"
+         y="-150.21107"
+         id="tspan599871">getAllShipsAddr ()</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1088.0245"
+         y="-134.58607"
+         id="tspan599873">getCargoStatus ()</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12.5px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9375"
+       x="1288.6135"
+       y="-94.107452"
+       id="text554192-4-2-4-0"><tspan
+         sodipodi:role="line"
+         id="tspan554190-6-5-7-3"
+         style="font-size:12.5px;stroke-width:0.9375"
+         x="1288.6135"
+         y="-94.107452">markCargo ()</tspan></text>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.9375px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker10336)"
+       d="m 758.6156,-302.1933 v 149.2959"
+       id="path647115" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.9375px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker10336)"
+       d="m 1011.7952,-375.96337 h 215.7059"
+       id="path647117" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.9375px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:;marker-start:url(#marker10046)"
+       d="m 1392.1876,-149.83679 -27.4231,102.344271"
+       id="path647121" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.9375px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker10336)"
+       d="M 860.05752,59.682862 921.76289,195.65901 H 1125.2234"
+       id="path647123" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.9375px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker10336);marker-start:url(#marker10046)"
+       d="M 778.56563,59.402184 853.4682,338.9424"
+       id="path647125" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.9375px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker10336);marker-start:url(#marker10046)"
+       d="M 1298.8932,237.37174 V 338.9424"
+       id="path647127" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.9375px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker10336);marker-start:url(#marker10046)"
+       d="M 1525.9623,-149.71624 V 235.68742 L 1466.348,338.9424"
+       id="path647129" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.9375px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker10336)"
+       d="M 960.33691,-301.87442 1125.2234,-16.282573"
+       id="path647131" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.9375px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker10336)"
+       d="m 1024.5115,-124.51231 h 182.2897 l 29.6565,-29.6565"
+       id="path647326" />
+  </g>
+</svg>
