@@ -84,6 +84,7 @@ static uint8_t getEmptySlot();
 static uint8_t getAllShips(am_addr_t buf[], uint8_t len);
 static uint8_t getAllCargo(am_addr_t buf[], uint8_t len);
 static uint32_t randomNumber(uint32_t rndL, uint32_t rndH);
+static uint32_t distToCrane(uint32_t x, uint32_t y);
 
 /**********************************************************************************************
  *	Initialise module
