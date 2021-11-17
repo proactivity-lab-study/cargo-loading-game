@@ -74,6 +74,8 @@ static void sendMsg(void *args); // Message sending thread
 
 static void sendNextCommandMsg(crane_command_t cmd, am_addr_t dest); // Send 'next command' message
 static void sendNextShipMsg(am_addr_t next_ship_addr, am_addr_t dest); // Send 'next ship' message
+static void find_my_neighb (am_addr_t* n1, am_addr_t* n2); // Returns two nearest neighbours
+static uint32_t distance (am_addr_t ship1, am_addr_t ship2); // Calculates distance between two ships
 
 /**********************************************************************************************
  *	Initialise module
@@ -109,9 +111,14 @@ static void thread_template(void *args)
 {
     bool send_command = true;
 	uint32_t val;
+	
+	am_addr_t n1, n2;
+	
 	for(;;)
 	{
 		osDelay(SS_DEFAULT_DELAY*osKernelGetTickFreq());
+		
+		find_my_neighb(&n1, &n2);
 		
 		// Do some strategy evaluation here
 		if(send_command)
@@ -283,3 +290,86 @@ static void sendNextShipMsg (am_addr_t next_ship_addr, am_addr_t dest)
 	osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
 	info1("Send next ship msg");
 }
+
+static void find_my_neighb (am_addr_t* n1, am_addr_t* n2)
+{
+    am_addr_t saddr[MAX_SHIPS], ship1, ship2;
+    uint8_t num_ships, i;
+    uint32_t dist1, dist2, dist;
+    
+    num_ships = getAllShipsAddr(saddr, MAX_SHIPS);
+    
+    if (num_ships < 2) // Less than two neighbours
+    {
+        if (num_ships == 1)
+        {
+            ship1 = saddr[0];
+            ship2 = 0;
+        }
+        else
+        {
+            ship1 = 0;
+            ship2 = 0;
+        }
+    }
+    else // At least two neighbours exist
+    {
+        ship1 = saddr[0];
+        dist1 = distance(ship1, my_address);
+        
+        ship2 = saddr[1];
+        dist2 = distance(ship2, my_address);
+        
+        if(dist1 <= dist2)
+        {
+            ship1 = saddr[0];
+            ship2 = saddr[1];
+        }
+        else 
+        {
+            ship1 = saddr[1];
+            ship2 = saddr[0];
+            dist = dist1;
+            dist1 = dist2;
+            dist2 = dist;
+        }
+
+        for (i = 2; i < num_ships; i++)
+        {
+            dist = distance(saddr[i], my_address);
+            
+            if (dist <= dist1)
+            {
+                dist2 = dist1;
+                dist1 = dist;
+                ship2 = ship1;
+                ship1 = saddr[i];
+            }
+            else if (dist < dist2) // Must not use <= here!
+            {
+                dist2 = dist;
+                ship2 = saddr[i];
+            }
+            else ; // Distance to ship i is greater than that of ship1 and ship2
+        }
+    }
+    *n1 = ship1;
+    *n2 = ship2;
+}
+
+static uint32_t distance (am_addr_t ship1, am_addr_t ship2)
+{
+    loc_bundle_t dist1, dist2;
+    
+    dist1 = getShipLocation(ship1);
+    dist2 = getShipLocation(ship2);
+    
+    return abs(dist1.x - dist2.x) + abs(dist1.y - dist2.y);
+}
+
+
+
+
+
+
+
