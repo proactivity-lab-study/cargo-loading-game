@@ -60,14 +60,21 @@ typedef enum
 	SHIP_MSG_ID_NEXT_SHIP		= 2
 } ship_msg_id_t;
 
+typedef struct
+{
+    am_addr_t root; // Root node of neighbourhood.
+    am_addr_t node_1;
+    am_addr_t node_2;
+} neighbourhood_t;
+
 static osMessageQueueId_t snd_msg_qID;
 static osThreadId_t snd_task_id;
-static osMutexId_t sfgl_mutex;
+static osMutexId_t my_hood_mutex;
 
 static comms_msg_t m_msg;
 static comms_layer_t* sradio;
 static am_addr_t my_address;
-static uint32_t fglobal_val; // Read-write by multiple threads, needs mutex protection
+static neighbourhood_t my_hood;
 
 static void thread_template(void *args); // A thread function
 static void sendMsg(void *args); // Message sending thread
@@ -76,6 +83,7 @@ static void sendNextCommandMsg(crane_command_t cmd, am_addr_t dest); // Send 'ne
 static void sendNextShipMsg(am_addr_t next_ship_addr, am_addr_t dest); // Send 'next ship' message
 static void find_my_neighb (am_addr_t* n1, am_addr_t* n2); // Returns two nearest neighbours
 static uint32_t distance (am_addr_t ship1, am_addr_t ship2); // Calculates distance between two ships
+static void rank_neighbourhood (am_addr_t n1, am_addr_t n2);
 
 /**********************************************************************************************
  *	Initialise module
@@ -84,14 +92,17 @@ static uint32_t distance (am_addr_t ship1, am_addr_t ship2); // Calculates dista
 void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 {
 	snd_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, comms_get_payload_max_length(radio), NULL);
-	sfgl_mutex = osMutexNew(NULL);	// Protects fglobal_val
+	my_hood_mutex = osMutexNew(NULL);	// Protects my_hood variable.
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	// This is the only write, so not going to protect it with mutex
 
-	while(osMutexAcquire(sfgl_mutex, 1000) != osOK); // Protects fglobal_val
-	fglobal_val = 0;
-	osMutexRelease(sfgl_mutex);
+	while(osMutexAcquire(my_hood_mutex, 1000) != osOK); // Protects my_hood variable.
+	my_hood.root = 0;
+	my_hood.node1 = 0;
+	my_hood.node2 = 0;
+	my_hood.num_root_bnode = 0;
+	osMutexRelease(my_hood_mutex);
 
 	// Default tactics choices
 	setXFirst(true);
@@ -111,7 +122,6 @@ static void thread_template(void *args)
 {
     bool send_command = true;
 	uint32_t val;
-	
 	am_addr_t n1, n2;
 	
 	for(;;)
@@ -120,28 +130,25 @@ static void thread_template(void *args)
 		
 		find_my_neighb(&n1, &n2);
 		
-		// Do some strategy evaluation here
-		if(send_command)
-        {
-            sendNextCommandMsg(CM_NOTHING_TO_DO, AM_BROADCAST_ADDR);
-            send_command = false;
-        }
-        else
-        {
-            sendNextShipMsg(my_address, AM_BROADCAST_ADDR);
-            send_command = true;
-        }
-        
-        // Select tactics
-	    setXFirst(true);
-	    setAlwaysPlaceCargo(true);
-	    setCraneTactics(cc_to_address, my_address, getShipLocation(my_address));
+		// If no neighbours
+		// else
+		list_neighbourhood(n1, n2);
 		
-		// Mutex usage example
-		while(osMutexAcquire(sfgl_mutex, 1000) != osOK); // Protects fglobal_val
-		val = fglobal_val;
-		fglobal_val = val + 1;
-		osMutexRelease(sfgl_mutex);
+		
+		if (root != my_address) 
+		{
+		    // Select tactics
+	        setXFirst(true);
+	        setAlwaysPlaceCargo(true);
+	        setCraneTactics(cc_parrot_ship, root, getShipLocation(root));
+		}
+		else
+		{
+		    // Default tactics choices
+	        setXFirst(true);
+	        setAlwaysPlaceCargo(true);
+	        setCraneTactics(cc_to_address, my_address, getShipLocation(my_address));
+		}
 	}
 }
 
@@ -367,9 +374,91 @@ static uint32_t distance (am_addr_t ship1, am_addr_t ship2)
     return abs(dist1.x - dist2.x) + abs(dist1.y - dist2.y);
 }
 
-
-
-
+static void rank_neighbourhood(am_addr_t n1, am_addr_t n2)
+{
+    uint32_t dc_my, dc_s1, dc_s2;
+	
+	dc_my = distToCrane(getShipLocation(my_address));
+	dc_s1 = distToCrane(getShipLocation(n1));
+	dc_s2 = distToCrane(getShipLocation(n2));
+	
+	while(osMutexAcquire(my_hood_mutex, 1000) != osOK); // Protects my_hood variable.
+	if (dc_my < dc_s1)
+	{
+	    if (dc_my < dc_s2) // me < s1, s2
+	    {
+	        my_hood.root = my_address;
+	        dc_s1 = distance(root, n1);
+	        dc_s2 = distance(root, n2);
+	        
+	        if (dc_s1 < dc_s2)
+	        {
+	            my_hood.node_1 = n1;
+	            my_hood.node_2 = n2;
+	        }
+	        else
+	        {
+	            my_hood.node_1 = n2;
+	            my_hood.node_2 = n1;
+	        }
+	    }
+	    else // s2 < me < s1
+	    {
+	        my_hood.root = n2;
+	        dc_s1 = distance(root, my_address);
+	        dc_s2 = distance(root, n1);
+	        
+	        if (dc_s1 < dc_s2)
+	        {
+	            my_hood.node_1 = my_address;
+	            my_hood.node_2 = n1;
+	        }
+	        else
+	        {
+	            my_hood.node_1 = n1;
+	            my_hood.node_2 = my_address;
+	        }
+	    }
+	}
+	else 
+	{
+	    if (dc_s1 < dc_s2) // s1 < me, s2
+	    {
+	        my_hood.root = n1;
+	        dc_s1 = distance(root, my_address);
+	        dc_s2 = distance(root, n2);
+	        
+	        if (dc_s1 < dc_s2)
+	        {
+	            my_hood.node_1 = my_address;
+	            my_hood.node_2 = n2;
+	        }
+	        else
+	        {
+	            my_hood.node_1 = n2;
+	            my_hood.node_2 = my_address;
+	        }
+	    }
+	    else // s2 < s1 < me
+	    {
+	        my_hood.root = n2;
+	        dc_s1 = distance(root, my_address);
+	        dc_s2 = distance(root, n1);
+	        
+	        if (dc_s1 < dc_s2)
+	        {
+	            my_hood.node_1 = my_address;
+	            my_hood.node_2 = n1;
+	        }
+	        else
+	        {
+	            my_hood.node_1 = n1;
+	            my_hood.node_2 = my_address;
+	        }
+	    }
+	}
+	osReleaseMutex(my_hood_mutex);
+}
 
 
 
