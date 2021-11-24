@@ -35,7 +35,8 @@ CFLAGS                  += -D_RTE_=1
 RELEASE_BUILD           ?= 0
 
 # Set the lll verbosity base level
-CFLAGS                  += -DBASE_LOG_LEVEL=0xFFFF
+#CFLAGS                  += -DBASE_LOG_LEVEL=0xFFFF
+CFLAGS                  += -DBASE_LOG_LEVEL=0x0010
 #CFLAGS                  += -DBASE_LOG_LEVEL=LOG_MASK_INFO
 
 # Enable debug messages
@@ -185,6 +186,7 @@ $(info DEFAULT_AM_ADDR=$(DEFAULT_AM_ADDR))
 $(info DEFAULT_RADIO_CHANNEL=$(DEFAULT_RADIO_CHANNEL))
 $(info DEFAULT_PAN_ID=$(DEFAULT_PAN_ID))
 $(info DEFAULT_RFPOWER_DBM=$(DEFAULT_RFPOWER_DBM))
+$(info BASE_LOG_LEVEL=$(BASE_LOG_LEVEL))
 # ------------------------------------------------------------------------------
 
 $(call passVarToCpp,CFLAGS,VERSION_MAJOR)
