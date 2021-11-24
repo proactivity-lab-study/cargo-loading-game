@@ -53,11 +53,13 @@
 #include "log.h"
 
 #define SS_DEFAULT_DELAY 2 // A delay, seconds
+#define SS_B_MSG_DELAY 2 // Send I-am-branch-msg interval (delay)
 
 typedef enum
 {
     SHIP_MSG_ID_NEXT_CMD        = 1,
-    SHIP_MSG_ID_NEXT_SHIP       = 2
+    SHIP_MSG_ID_NEXT_SHIP       = 2,
+    SHIP_BRANCH_MSG_ID          = 3
 } ship_msg_id_t;
 
 typedef enum
@@ -87,6 +89,7 @@ static neighbourhood_t my_hood;
 //static strategy_state_t strategy;
 
 static void ship_strategy_thread(void *args);
+static void send_branch_msg (void *args);
 static void sendMsg(void *args); // Message sending thread
 
 static void sendNextCommandMsg(crane_command_t cmd, am_addr_t dest); // Send 'next command' message
@@ -121,6 +124,7 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	setCraneTactics(cc_to_address, my_address, getShipLocation(my_address));
 	
 	osThreadNew(ship_strategy_thread, NULL, NULL);
+	osThreadNew(send_branch_msg, NULL, NULL);
 	snd_task_id = osThreadNew(sendMsg, NULL, NULL); // Sends messages
 	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
 }
@@ -255,7 +259,9 @@ static void sendMsg(void *args)
     // NB! Don't forget to use hton() functions when sending variables larger than one byte!
     ship_next_cmd_msg_t *cmsg, *cpkt;
     ship_next_ship_msg_t *smsg, *spkt;
+    branch_msg_t *bmsg, *bpkt;
     uint8_t packet[comms_get_payload_max_length(sradio)];
+    
     for(;;)
     {
         osMessageQueueGet(snd_msg_qID, &packet, NULL, osWaitForever);
@@ -300,7 +306,24 @@ static void sendMsg(void *args)
             comms_am_set_destination(sradio, &m_msg, spkt->senderAddr); // Setting destination address
             comms_set_payload_length(sradio, &m_msg, sizeof(ship_next_ship_msg_t));
             break;
+            
+            case SHIP_BRANCH_MSG_ID :
+            
+            bmsg = (branch_msg_t *)comms_get_payload(sradio, &m_msg, sizeof(branch_msg_t));
+            if (cmsg == NULL)
+            {
+                continue ;// Continue for(;;) loop
+            }
+            bpkt = (branch_msg_t*)packet;
+            bmsg->messageID = bpkt->messageID;
+            bmsg->num_branch_nodes = bpkt->num_branch_nodes;
+            bmsg->senderAddr = hton16(my_address);
 
+            comms_set_packet_type(sradio, &m_msg, AMID_SHIPCOMMUNICATION);
+            comms_am_set_destination(sradio, &m_msg, bpkt->senderAddr); // Setting destination address
+            comms_set_payload_length(sradio, &m_msg, sizeof(branch_msg_t));
+            break;
+            
             default :
                 break ;
         }
@@ -308,6 +331,49 @@ static void sendMsg(void *args)
         // Send data packet
         comms_error_t result = comms_send(sradio, &m_msg, radioSendDone, NULL);
         logger(result == COMMS_SUCCESS ? LOG_DEBUG1: LOG_WARN1, "snd %u", result);
+    }
+}
+
+static void send_branch_msg (void *args)
+{
+    am_addr_t dest_address;
+    branch_msg_t packet;
+    
+    for(;;)
+    {
+        osDelay(SS_B_MSG_DELAY*osKernelGetTickFreq());
+        
+        while(osMutexAcquire(my_hood_mutex, 1000) != osOK); // Protects my_hood variable.
+        if (*my_hood.root == my_address)
+        {
+            // Pole vaja saata sõnumit
+        }
+        else
+        {
+            
+            if (my_hood.node_1 == my_address) dest_address = 0; // Pole vaja midagi teha
+            else 
+            {
+                if (my_hood.node_2 == my_address) dest_address = my_hood.node_1;
+                else
+                {
+                    if (my_hood.node_3 == my_address) dest_address = my_hood.node_2;
+                    else ; // Siia ei tohiks sattuda kunagi.
+                }
+            }
+        
+            osMutexRelease(my_hood_mutex);
+
+            if (0 != dest_address)
+            {
+	            packet.messageID = SHIP_BRANCH_MSG_ID;
+	            packet.senderAddr = dest_address; // Piggybacking destination address here
+	            packet.num_branch_nodes = 1 + num_bnodes;
+	            
+	            osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
+	            info1("Send b msg");
+	        }
+	    }
     }
 }
 

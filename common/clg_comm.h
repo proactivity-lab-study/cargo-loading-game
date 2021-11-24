@@ -43,6 +43,14 @@ typedef struct {
 	uint8_t cmd;			
 } ship_next_cmd_msg_t;
 
+// Number of nodes in branch message
+#pragma pack(1)
+typedef struct {
+	uint8_t messageID;
+	am_addr_t senderAddr;
+	uint8_t num_branch_nodes;			
+} branch_msg_t;
+
 // 'Next ship' message 
 #pragma pack(1)
 typedef struct {
