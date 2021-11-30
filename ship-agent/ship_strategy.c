@@ -25,8 +25,6 @@
  *
  * TODO Mechanism to leave the game.
  * 
- * TODO m_msg max payload size for queue and comms_get_payload function
- * 
  * 
  * Copyright Proactivity Lab 2020
  *
@@ -77,27 +75,34 @@ typedef struct
     am_addr_t node_3;
 } neighbourhood_t;
 
-uint16_t num_bnodes; // Total number of nodes in branches from me.
+typedef struct
+{
+    am_addr_t ship_addr; // Address of ship
+    uint16_t num_bnodes; // Total number of nodes in branches from this ship.
+    uint32_t validity_time;
+} ship_branches_t;
+
 static osMessageQueueId_t snd_msg_qID;
 static osThreadId_t snd_task_id;
-static osMutexId_t my_hood_mutex;
+static osMutexId_t my_hood_mutex, b_node_mutex;
 
-static comms_msg_t m_msg;
 static comms_layer_t* sradio;
 static am_addr_t my_address;
 static neighbourhood_t my_hood;
+static ship_branches_t ship_branches[MAX_SHIPS];
 //static strategy_state_t strategy;
 
 static void ship_strategy_thread(void *args);
 static void send_branch_msg (void *args);
 static void sendMsg(void *args); // Message sending thread
 
-static void sendNextCommandMsg(crane_command_t cmd, am_addr_t dest); // Send 'next command' message
-static void sendNextShipMsg(am_addr_t next_ship_addr, am_addr_t dest); // Send 'next ship' message
 static void find_my_neighb (am_addr_t* n1, am_addr_t* n2); // Returns two nearest neighbours
 static uint32_t distance (am_addr_t ship1, am_addr_t ship2); // Calculates distance between two ships
 static void rank_neighbourhood (am_addr_t n1, am_addr_t n2);
 static void set_root ();
+static void add_branch_info(am_addr_t sAddr, uint8_t numBNodes);
+static uint8_t calc_bnodes();
+static void update_bnode_info();
 
 /**********************************************************************************************
  *	Initialise module
@@ -105,8 +110,10 @@ static void set_root ();
 
 void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 {
+    uint8_t i;
 	snd_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, comms_get_payload_max_length(radio), NULL);
 	my_hood_mutex = osMutexNew(NULL);	// Protects my_hood variable.
+	b_node_mutex = osMutexNew(NULL);	// Protects ship_branches array.
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	// This is the only write, so not going to protect it with mutex
@@ -115,8 +122,17 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	my_hood.root = 0;
 	my_hood.node_1 = 0;
 	my_hood.node_2 = 0;
-	num_bnodes = 0;
+    my_hood.node_3 = 0;
 	osMutexRelease(my_hood_mutex);
+
+	while(osMutexAcquire(b_node_mutex, 1000) != osOK);
+	for(i=0;i<MAX_SHIPS;i++)
+	{
+		ship_branches[i].ship_addr = 0;
+		ship_branches[i].num_bnodes = 0;
+		ship_branches[i].validity_time = 0;
+	}
+	osMutexRelease(b_node_mutex);
 
 	// Default tactics choices
 	setXFirst(true);
@@ -155,7 +171,6 @@ static void ship_strategy_thread(void *args)
             my_hood.node_2 = 0;
             my_hood.node_3 = 0;
             my_hood.root = &(my_hood.node_1);
-            num_bnodes = 0;
             osMutexRelease(my_hood_mutex);
         }
         else // At least one neighbour
@@ -208,35 +223,15 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 
     uint8_t pl_len = comms_get_payload_length(comms, msg);
     uint8_t * rmsg = (uint8_t *) comms_get_payload(comms, msg, pl_len);
-    am_addr_t sender, ship;
-    uint8_t cmd;
-    ship_next_cmd_msg_t *cpkt;
-    ship_next_ship_msg_t *spkt;
+    
+    branch_msg_t *bpkt;
 
     switch(rmsg[0])
     {
-    
-        // Next command message
-        case SHIP_MSG_ID_NEXT_CMD :
-            cpkt = (ship_next_cmd_msg_t*)comms_get_payload(comms, msg, sizeof(ship_next_cmd_msg_t));
-            info1("Rcvd - nxt cmd msg");
-            sender = ntoh16(cpkt->senderAddr);
-            cmd = cpkt->cmd;
-
-            // Do something with this info.
-            
-            break;
-            
-        // Next ship message
-        case SHIP_MSG_ID_NEXT_SHIP :
-            spkt = (ship_next_ship_msg_t*)comms_get_payload(comms, msg, sizeof(ship_next_ship_msg_t));
-            info1("Rcvd - nxt ship msg");
-            sender = ntoh16(spkt->senderAddr);
-            ship = ntoh16(spkt->nextShip);
-            
-            // Do something with this info.
-            
-            break;
+        case SHIP_BRANCH_MSG_ID :
+            bpkt = (branch_msg_t*)comms_get_payload(comms, msg, sizeof(branch_msg_t));
+            info1("Rcvd - branch msg");
+            add_branch_info(ntoh16(bpkt->senderAddr), bpkt->num_branch_nodes);
             
         default :
             info1("Rcvd - unk msg");
@@ -257,8 +252,7 @@ static void radioSendDone(comms_layer_t * comms, comms_msg_t * msg, comms_error_
 static void sendMsg(void *args)
 {
     // NB! Don't forget to use hton() functions when sending variables larger than one byte!
-    ship_next_cmd_msg_t *cmsg, *cpkt;
-    ship_next_ship_msg_t *smsg, *spkt;
+    static comms_msg_t m_msg;
     branch_msg_t *bmsg, *bpkt;
     uint8_t packet[comms_get_payload_max_length(sradio)];
     
@@ -270,47 +264,10 @@ static void sendMsg(void *args)
         comms_init_message(sradio, &m_msg);		
         switch(packet[0])
         {
-            // Next command message
-            case SHIP_MSG_ID_NEXT_CMD :
-
-            cmsg = (ship_next_cmd_msg_t *)comms_get_payload(sradio, &m_msg, sizeof(ship_next_cmd_msg_t));
-            if (cmsg == NULL)
-            {
-                continue ;// Continue for(;;) loop
-            }
-
-            cpkt = (ship_next_cmd_msg_t*)packet;
-            cmsg->messageID = cpkt->messageID;
-            cmsg->cmd = cpkt->cmd;
-            cmsg->senderAddr = hton16(my_address);
-
-            comms_set_packet_type(sradio, &m_msg, AMID_SHIPCOMMUNICATION);
-            comms_am_set_destination(sradio, &m_msg, cpkt->senderAddr); // Setting destination address
-            comms_set_payload_length(sradio, &m_msg, sizeof(ship_next_cmd_msg_t));
-            break;
-
-            // Next ship message
-            case SHIP_MSG_ID_NEXT_SHIP :
-            
-            smsg = (ship_next_ship_msg_t *)comms_get_payload(sradio, &m_msg, sizeof(ship_next_ship_msg_t));
-            if (smsg == NULL)
-            {
-                continue ;// Continue for(;;) loop
-            }
-
-            spkt = (ship_next_ship_msg_t*)packet;
-            smsg->messageID = spkt->messageID;
-            smsg->nextShip = hton16(spkt->nextShip);
-            smsg->senderAddr = hton16(my_address);
-            comms_set_packet_type(sradio, &m_msg, AMID_SHIPCOMMUNICATION);
-            comms_am_set_destination(sradio, &m_msg, spkt->senderAddr); // Setting destination address
-            comms_set_payload_length(sradio, &m_msg, sizeof(ship_next_ship_msg_t));
-            break;
-            
             case SHIP_BRANCH_MSG_ID :
             
             bmsg = (branch_msg_t *)comms_get_payload(sradio, &m_msg, sizeof(branch_msg_t));
-            if (cmsg == NULL)
+            if (bmsg == NULL)
             {
                 continue ;// Continue for(;;) loop
             }
@@ -338,6 +295,7 @@ static void send_branch_msg (void *args)
 {
     am_addr_t dest_address;
     branch_msg_t packet;
+    uint8_t numb;
     
     for(;;)
     {
@@ -368,7 +326,9 @@ static void send_branch_msg (void *args)
             {
 	            packet.messageID = SHIP_BRANCH_MSG_ID;
 	            packet.senderAddr = dest_address; // Piggybacking destination address here
-	            packet.num_branch_nodes = 1 + num_bnodes;
+                update_bnode_info();
+                numb = calc_bnodes();
+	            packet.num_branch_nodes = 1 + numb;
 	            
 	            osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
 	            info1("Send b msg");
@@ -380,30 +340,6 @@ static void send_branch_msg (void *args)
 /**********************************************************************************************
  *	Utility functions
  **********************************************************************************************/
-
-static void sendNextCommandMsg (crane_command_t cmd, am_addr_t dest)
-{
-	ship_next_cmd_msg_t packet;
-	
-	packet.messageID = SHIP_MSG_ID_NEXT_CMD;
-	packet.senderAddr = dest; // Piggybacking destination address here
-	packet.cmd = cmd;
-	
-	osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
-	info1("Send next cmd msg");
-}
-
-static void sendNextShipMsg (am_addr_t next_ship_addr, am_addr_t dest)
-{
-	ship_next_ship_msg_t packet;
-	
-	packet.messageID = SHIP_MSG_ID_NEXT_SHIP;
-	packet.senderAddr = dest; // Piggybacking destination address here
-	packet.nextShip = next_ship_addr;
-	
-	osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
-	info1("Send next ship msg");
-}
 
 static void find_my_neighb (am_addr_t* n1, am_addr_t* n2)
 {
@@ -613,3 +549,67 @@ static void set_root()
     }
     osMutexRelease(my_hood_mutex);
 }
+
+static void add_branch_info(am_addr_t sAddr, uint8_t numBNodes)
+{
+    uint8_t k;
+    bool new_ship = false;
+    
+	for(k=0;k<MAX_SHIPS;k++)
+	{
+        if(ship_branches[k].ship_addr == sAddr) // Update for known ship.
+        {
+            ship_branches[k].num_bnodes = numBNodes;
+            ship_branches[k].validity_time = osKernelGetTickCount() + (SS_B_MSG_DELAY * 10 * osKernelGetTickFreq());
+            break; 
+        }
+        else if (ship_branches[k].ship_addr == 0) // End of list, break for() loop
+        {
+            new_ship = true;
+            break; 
+        }
+        else ; // Continue searching
+    }
+    
+    if(new_ship) // Add new branch-ship
+    {
+        ship_branches[k].ship_addr = sAddr;
+        ship_branches[k].num_bnodes = numBNodes;
+        ship_branches[k].validity_time = osKernelGetTickCount() + (SS_B_MSG_DELAY * 10 * osKernelGetTickFreq());
+    }
+}
+
+static void update_bnode_info()
+{
+    uint8_t i;
+    uint32_t cTime = osKernelGetTickCount();
+    
+    while(osMutexAcquire(b_node_mutex, 1000) != osOK);
+    for(i=0;i<MAX_SHIPS;i++)
+    {
+	    if(ship_branches[i].validity_time < cTime)
+	    {
+	        ship_branches[i].ship_addr = 0;
+	        ship_branches[i].num_bnodes = 0;
+	        ship_branches[i].validity_time = 0;
+	    }
+    }
+	osMutexRelease(b_node_mutex);
+}
+
+static uint8_t calc_bnodes()
+{
+    uint8_t i;
+    uint16_t numb = 0;
+    
+    while(osMutexAcquire(b_node_mutex, 1000) != osOK);
+    for(i=0;i<MAX_SHIPS;i++)
+    {
+        if(ship_branches[i].ship_addr != 0)numb += ship_branches[i].num_bnodes;
+    }
+	osMutexRelease(b_node_mutex);
+    
+    return numb;
+}
+
+
