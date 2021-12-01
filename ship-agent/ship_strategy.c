@@ -52,12 +52,14 @@
 
 #define SS_DEFAULT_DELAY 2 // A delay, seconds
 #define SS_B_MSG_DELAY 2 // Send I-am-branch-msg interval (delay)
+#define SS_R_MSG_DELAY 10 // Send root msg interval
 
 typedef enum
 {
     SHIP_MSG_ID_NEXT_CMD        = 1,
     SHIP_MSG_ID_NEXT_SHIP       = 2,
-    SHIP_BRANCH_MSG_ID          = 3
+    SHIP_BRANCH_MSG_ID          = 3,
+    SHIP_ROOT_MSG_ID            = 4
 } ship_msg_id_t;
 
 typedef enum
@@ -82,9 +84,11 @@ typedef struct
     uint32_t validity_time;
 } ship_branches_t;
 
+static uint8_t game_root;
+
 static osMessageQueueId_t snd_msg_qID;
 static osThreadId_t snd_task_id;
-static osMutexId_t my_hood_mutex, b_node_mutex;
+static osMutexId_t my_hood_mutex, b_node_mutex, game_root_mutex;
 
 static comms_layer_t* sradio;
 static am_addr_t my_address;
@@ -94,6 +98,7 @@ static ship_branches_t ship_branches[MAX_SHIPS];
 
 static void ship_strategy_thread(void *args);
 static void send_branch_msg (void *args);
+static void send_root_msg (void *args);
 static void sendMsg(void *args); // Message sending thread
 
 static void find_my_neighb (am_addr_t* n1, am_addr_t* n2); // Returns two nearest neighbours
@@ -114,6 +119,7 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	snd_msg_qID = osMessageQueueNew(MAX_SHIPS + 3, comms_get_payload_max_length(radio), NULL);
 	my_hood_mutex = osMutexNew(NULL);	// Protects my_hood variable.
 	b_node_mutex = osMutexNew(NULL);	// Protects ship_branches array.
+	game_root_mutex = osMutexNew(NULL);	// Protects game_root variable.
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	// This is the only write, so not going to protect it with mutex
@@ -125,6 +131,10 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
     my_hood.node_3 = 0;
 	osMutexRelease(my_hood_mutex);
 
+    while(osMutexAcquire(game_root_mutex, 1000) != osOK);
+    game_root = 0;
+    osMutexRelease(game_root_mutex);
+    
 	while(osMutexAcquire(b_node_mutex, 1000) != osOK);
 	for(i=0;i<MAX_SHIPS;i++)
 	{
@@ -141,6 +151,7 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	
 	osThreadNew(ship_strategy_thread, NULL, NULL);
 	osThreadNew(send_branch_msg, NULL, NULL);
+	osThreadNew(send_root_msg, NULL, NULL);
 	snd_task_id = osThreadNew(sendMsg, NULL, NULL); // Sends messages
 	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
 }
@@ -222,16 +233,46 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
     // NB! Don't forget to use ntoh() functions when receiving variables larger than one byte!
 
     uint8_t pl_len = comms_get_payload_length(comms, msg);
-    uint8_t * rmsg = (uint8_t *) comms_get_payload(comms, msg, pl_len);
+    uint8_t *rmsg = (uint8_t *) comms_get_payload(comms, msg, pl_len);
+    uint8_t new_root;
     
     branch_msg_t *bpkt;
-
+    root_msg_t *rpkt;
+    
     switch(rmsg[0])
     {
         case SHIP_BRANCH_MSG_ID :
             bpkt = (branch_msg_t*)comms_get_payload(comms, msg, sizeof(branch_msg_t));
             info1("Rcvd - branch msg");
             add_branch_info(ntoh16(bpkt->senderAddr), bpkt->num_branch_nodes);
+            break;
+            
+        case SHIP_ROOT_MSG_ID :
+            rpkt = (root_msg_t*)comms_get_payload(comms, msg, sizeof(root_msg_t));
+            info1("Rcvd - root msg");
+            
+            if (*(my_hood.root) == my_address)
+            {
+                new_root = rpkt->num_root_nodes;
+                
+                while(osMutexAcquire(game_root_mutex, 1000) != osOK);
+                
+                if (new_root > game_root)
+                {
+                    game_root = new_root;
+                }
+                else if (new_root == game_root)
+                {
+                    // who is closer to crane
+                }
+                else ; // Root has less ships than game_root
+                
+                osMutexRelease(game_root_mutex);
+            }
+            else ; // I am not root, do nothing
+            
+            
+            break;
             
         default :
             info1("Rcvd - unk msg");
@@ -254,6 +295,7 @@ static void sendMsg(void *args)
     // NB! Don't forget to use hton() functions when sending variables larger than one byte!
     static comms_msg_t m_msg;
     branch_msg_t *bmsg, *bpkt;
+    root_msg_t *rmsg, *rpkt;
     uint8_t packet[comms_get_payload_max_length(sradio)];
     
     for(;;)
@@ -262,6 +304,7 @@ static void sendMsg(void *args)
         osThreadFlagsWait(0x00000001U, osFlagsWaitAny, osWaitForever); // Flags are automatically cleared
 
         comms_init_message(sradio, &m_msg);		
+        
         switch(packet[0])
         {
             case SHIP_BRANCH_MSG_ID :
@@ -279,6 +322,24 @@ static void sendMsg(void *args)
             comms_set_packet_type(sradio, &m_msg, AMID_SHIPCOMMUNICATION);
             comms_am_set_destination(sradio, &m_msg, bpkt->senderAddr); // Setting destination address
             comms_set_payload_length(sradio, &m_msg, sizeof(branch_msg_t));
+            break;
+            
+            case SHIP_ROOT_MSG_ID :
+            
+            bmsg = (root_msg_t *)comms_get_payload(sradio, &m_msg, sizeof(root_msg_t));
+            if (bmsg == NULL)
+            {
+                continue ; // Continue for(;;) loop
+            }
+            
+            rpkt = (root_msg_t*)packet;
+            rmsg->messageID = rpkt->messageID;
+            rmsg->num_root_nodes = rpkt->num_root_nodes;
+            rmsg->senderAddr = hton16(my_address);
+
+            comms_set_packet_type(sradio, &m_msg, AMID_SHIPCOMMUNICATION);
+            comms_am_set_destination(sradio, &m_msg, rpkt->senderAddr); // Setting destination address
+            comms_set_payload_length(sradio, &m_msg, sizeof(root_msg_t));
             break;
             
             default :
@@ -334,6 +395,36 @@ static void send_branch_msg (void *args)
 	            info1("Send b msg");
 	        }
 	    }
+    }
+}
+
+static void send_root_msg (void *args)
+{
+    root_msg_t packet;
+    uint8_t numb;
+    
+    for(;;)
+    {
+        osDelay(SS_R_MSG_DELAY*osKernelGetTickFreq());
+        
+        while(osMutexAcquire(my_hood_mutex, 1000) != osOK); // Protects my_hood variable.
+        
+        if (*(my_hood.root) == my_address)
+        {
+            osMutexRelease(my_hood_mutex);
+            
+            packet.messageID = SHIP_ROOT_MSG_ID;
+	        packet.senderAddr = AM_BROADCAST_ADDR; // Piggybacking destination address here
+            update_bnode_info();
+            numb = calc_bnodes();
+            packet.num_root_nodes = 1 + numb;
+            
+            osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
+            info1("Send r msg");
+        }
+        else ; // I am not root, do nothing
+        
+        osMutexRelease(my_hood_mutex);
     }
 }
 
