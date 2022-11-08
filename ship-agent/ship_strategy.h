@@ -21,4 +21,6 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr);
 
 void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void* user);
 
+void notifyNewCraneRound();
+
 #endif //SHIP_STRATEGY_H_

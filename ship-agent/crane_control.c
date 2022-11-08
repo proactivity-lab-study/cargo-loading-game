@@ -66,6 +66,7 @@
 #include "game_status.h"
 #include "clg_comm.h"
 #include "game_types.h"
+#include "ship_strategy.h"
 
 #include "loglevels.h"
 #define __MODUUL__ "ccntr"
@@ -308,6 +309,9 @@ static void locationMsgHandler(void *args)
 			}
 
 			clearCmdsBuf(); // Clear contents of cmds buffer
+			
+			// Notify ship strategy module that a new crane round begun.
+			notifyNewCraneRound();
 		}
 	}
 }

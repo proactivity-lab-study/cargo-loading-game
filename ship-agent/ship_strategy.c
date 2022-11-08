@@ -60,6 +60,8 @@ typedef enum
 	SHIP_MSG_ID_NEXT_SHIP		= 2
 } ship_msg_id_t;
 
+static float cv_probability[5];
+
 static osMessageQueueId_t snd_msg_qID;
 static osThreadId_t snd_task_id;
 static osMutexId_t sfgl_mutex;
@@ -69,11 +71,12 @@ static comms_layer_t* sradio;
 static am_addr_t my_address;
 static uint32_t fglobal_val; // Read-write by multiple threads, needs mutex protection
 
-static void thread_template(void *args); // A thread function
+static void ben_or_protocol(void *args); // A thread function
 static void sendMsg(void *args); // Message sending thread
 
 static void sendNextCommandMsg(crane_command_t cmd, am_addr_t dest); // Send 'next command' message
 static void sendNextShipMsg(am_addr_t next_ship_addr, am_addr_t dest); // Send 'next ship' message
+static uint32_t randomNumber(uint32_t rndL, uint32_t rndH);
 
 /**********************************************************************************************
  *	Initialise module
@@ -86,6 +89,13 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	// This is the only write, so not going to protect it with mutex
+	srand(osKernelGetTickCount()); // Initialise random number generator
+    
+    cv_probability[0] = 0.0;
+    cv_probability[1] = 0.0;
+    cv_probability[2] = 0.0;
+    cv_probability[3] = 0.0;
+    cv_probability[4] = 0.0;
 
 	while(osMutexAcquire(sfgl_mutex, 1000) != osOK); // Protects fglobal_val
 	fglobal_val = 0;
@@ -96,7 +106,7 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	setAlwaysPlaceCargo(true);
 	setCraneTactics(cc_to_address, my_address, getShipLocation(my_address));
 	
-	osThreadNew(thread_template, NULL, NULL); 			// Template thread
+	osThreadNew(ben_or_protocol, NULL, NULL); 			// Template thread
 	snd_task_id = osThreadNew(sendMsg, NULL, NULL); 	// Sends messages
 	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
 }
@@ -105,36 +115,35 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
  *	 Module threads
  *********************************************************************************************/
 
-static void thread_template(void *args)
+static void ben_or_protocol(void *args)
 {
-    bool send_command = true;
-	uint32_t val;
+    
 	for(;;)
 	{
-		osDelay(SS_DEFAULT_DELAY*osKernelGetTickFreq());
+		// TODO wait for new crane round
 		
-		// Do some strategy evaluation here
-		if(send_command)
-        {
-            sendNextCommandMsg(CM_NOTHING_TO_DO, AM_BROADCAST_ADDR);
-            send_command = false;
-        }
-        else
-        {
-            sendNextShipMsg(my_address, AM_BROADCAST_ADDR);
-            send_command = true;
-        }
+		// TODO get new consensus value
+		
+		// TODO send consensus message ONE
+		
+		// TODO wait until received N*2/3 message ONE
+		
+		    // TODO check for consensus (at least N/2 of the same value)
+		
+		    // TODO send consensus message TWO (either D or ?)
+		
+		// TODO wait until received N*2/3 message TWO
+		
+		    // TODO check for consensus (at least N/2 of D message)
+		        // TODO send crane command
+		   
+		    // TODO else check for at least one D message
+		        // TODO change consensus value to value from D message
+		   
+		    // TODO else get new consensus value
+	    
+	    // TODO start new round if consensus was not found (else wait for new crane round)
         
-        // Select tactics
-	    setXFirst(true);
-	    setAlwaysPlaceCargo(true);
-	    setCraneTactics(cc_to_address, my_address, getShipLocation(my_address));
-		
-		// Mutex usage example
-		while(osMutexAcquire(sfgl_mutex, 1000) != osOK); // Protects fglobal_val
-		val = fglobal_val;
-		fglobal_val = val + 1;
-		osMutexRelease(sfgl_mutex);
 	}
 }
 
@@ -282,4 +291,42 @@ static void sendNextShipMsg (am_addr_t next_ship_addr, am_addr_t dest)
 	
 	osMessageQueuePut(snd_msg_qID, &packet, 0, osWaitForever);
 	info1("Send next ship msg");
+}
+
+static crane_command_t get_consensus_value()
+{
+    crane_command_t val = CM_NO_COMMAND;
+    float random;
+    float step_val;
+    
+    // get random number
+    random = (float)randomNumber(0,100)/100;
+    
+    // get consensus value based on random number
+    step_val = cv_probability[0];
+    for(int i = 1; i <= 5;i++)
+    {
+    	if(step_val > random) // TODO what if i=5 ??
+    	{
+    	    val = i;
+    	    break;
+    	}
+    	else step_val += cv_probability[i];
+	}
+    
+    
+    return val;
+}
+
+
+static uint32_t randomNumber(uint32_t rndL, uint32_t rndH)
+{
+	uint32_t range = rndH + 1 - rndL;
+	return rand() % range + rndL;
+}
+
+void notifyNewCraneRound()
+{
+    // TODO Initiate new consensus round
+    // TODO Initiate calculation of new consensus probabilities
 }
