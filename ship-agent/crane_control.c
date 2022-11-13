@@ -90,6 +90,7 @@ static bool alwaysPlaceCargo = true; // Always send 'place cargo' command when c
 static cmd_sel_tactic_t tactic;
 static am_addr_t tactic_addr;
 static loc_bundle_t tactic_loc;
+static crane_command_t tactic_cmd;
 
 static osMutexId_t cmdb_mutex, cloc_mutex, cctt_mutex;
 static osMessageQueueId_t cmsg_qID, lmsg_qID, smsg_qID;
@@ -148,6 +149,7 @@ void initCraneControl(comms_layer_t* radio, am_addr_t addr)
 	tactic = cc_to_address;
 	tactic_loc.x = tactic_loc.y = 0; // Most likely I don't have a location yet
 	tactic_addr = my_address;
+	tactic_cmd = CM_NO_COMMAND;
 	osMutexRelease(cctt_mutex);
 
     osThreadNew(commandMsgHandler, NULL, NULL);		// Handles received crane command messages
@@ -183,6 +185,7 @@ static void craneMainLoop(void *args)
 			tt = tactic;
 			addr = tactic_addr;
 			loc = tactic_loc;
+			cmd = tactic_cmd;
 			osMutexRelease(cctt_mutex);
 
 			switch(tt)
@@ -221,6 +224,17 @@ static void craneMainLoop(void *args)
 				case cc_popular_command	:	// Send the command that is currently most popular.
 
 					cmd = selectPopular();
+					break;
+					
+			    case cc_only_consensus	:	// Send only when consensus, only consensus value.
+
+					if(cmd != CM_NO_COMMAND)
+					{
+					    while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+					    tactic_cmd = CM_NO_COMMAND; // Reset after every round.
+					    osMutexRelease(cctt_mutex);
+					}
+					else cmd = CM_NOTHING_TO_DO;
 					break;
 
 				default :
@@ -493,6 +507,13 @@ cmd_sel_tactic_t getCraneTactics(am_addr_t *ship_addr, loc_bundle_t *loc)
 	loc = &l;
 	
 	return tt;
+}
+
+void send_consensus_command(crane_command_t cons_val)
+{
+    while(osMutexAcquire(cctt_mutex, 1000) != osOK);
+    tactic_cmd = cons_val;
+	osMutexRelease(cctt_mutex);
 }
 
 // Selects an appropriate command to get the crane to location (x; y)

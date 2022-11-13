@@ -54,12 +54,6 @@
 
 #define SS_DEFAULT_DELAY 2 // A delay, seconds
 
-typedef enum
-{
-	SHIP_MSG_ID_NEXT_CMD 	    = 1,
-	SHIP_MSG_ID_NEXT_SHIP		= 2
-} ship_msg_id_t;
-
 static float cv_probability[5];
 
 static osMessageQueueId_t snd_msg_qID;
@@ -74,9 +68,13 @@ static uint32_t fglobal_val; // Read-write by multiple threads, needs mutex prot
 static void ben_or_protocol(void *args); // A thread function
 static void sendMsg(void *args); // Message sending thread
 
+static osStatus_t sendConsensusMsgTWO (crane_command_t value_proposal, uint16_t round_num, bool decision);
+static osStatus_t sendConsensusMsgONE (crane_command_t value_proposal, uint16_t round_num);
 static void sendNextCommandMsg(crane_command_t cmd, am_addr_t dest); // Send 'next command' message
 static void sendNextShipMsg(am_addr_t next_ship_addr, am_addr_t dest); // Send 'next ship' message
 static uint32_t randomNumber(uint32_t rndL, uint32_t rndH);
+
+static osThreadId_t ben_or_thread_id;
 
 /**********************************************************************************************
  *	Initialise module
@@ -106,7 +104,7 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	setAlwaysPlaceCargo(true);
 	setCraneTactics(cc_to_address, my_address, getShipLocation(my_address));
 	
-	osThreadNew(ben_or_protocol, NULL, NULL); 			// Template thread
+	ben_or_thread_id = osThreadNew(ben_or_protocol, NULL, NULL); 			// Template thread
 	snd_task_id = osThreadNew(sendMsg, NULL, NULL); 	// Sends messages
 	osThreadFlagsSet(snd_task_id, 0x00000001U); // Sets thread to ready-to-send state
 }
@@ -117,33 +115,67 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 
 static void ben_or_protocol(void *args)
 {
+    crane_command_t my_proposal, consensus_value = CM_LEFT;
+    uint16_t round_cnt = 0;
+    bool no_consensus = true;
+    osStatus_t send_err;
+    loc_bundle_t loc = {0,0};
+    uint32_t mode_val;
+    uint32_t mode_val_cnt;
+    
+    //If not already, set crane tactics to cc_only_consensus
+    setCraneTactics(cc_only_consensus, AM_BROADCAST_ADDR, loc);
     
 	for(;;)
 	{
-		// TODO wait for new crane round
+
+		// Wait for new crane round.
+	    // TODO I'm interested would the Ben Or protocol work without this sync. Are round counts necessary at all in our case???
+		osThreadFlagsWait(BEN_OR_WFLAGS_CRANE, osFlagsWaitAll, osWaitForever); // osWaitForever, because without sync, no point in blindly sending messages
 		
-		// TODO get new consensus value
-		
-		// TODO send consensus message ONE
-		
-		// TODO wait until received N*2/3 message ONE
-		
-		    // TODO check for consensus (at least N/2 of the same value)
-		
-		    // TODO send consensus message TWO (either D or ?)
-		
-		// TODO wait until received N*2/3 message TWO
-		
-		    // TODO check for consensus (at least N/2 of D message)
-		        // TODO send crane command
-		   
-		    // TODO else check for at least one D message
-		        // TODO change consensus value to value from D message
-		   
-		    // TODO else get new consensus value
-	    
-	    // TODO start new round if consensus was not found (else wait for new crane round)
-        
+		while (no_consensus)
+		{
+		    round_cnt++;
+		    // TODO get new consensus value
+		    my_proposal = CM_PLACE_CARGO;
+		    
+		    // Send consensus message ONE.
+		    send_err = sendConsensusMsgONE(my_proposal, round_cnt);
+		    if(osOK != send_err)break; // Bail out and wait for new crane round.
+		    
+		    // Wait until received N*2/3 message ONE.
+		    // TODO should we use waitforever???
+		    osThreadFlagsWait(BEN_OR_WFLAGS_MSGONE, osFlagsWaitAll, osWaitForever);
+		    
+		        // TODO check for consensus (at least N/2 of the same value)
+		        mode_val = CM_DOWN; // Dummy-value
+		        mode_val_cnt = 9; // Dummy-value
+		        no_consensus = false; // Dummy-value
+		        
+		        if(!no_consensus)my_proposal = mode_val;
+		        else my_proposal = CM_UP; // This actually won't matter according to the consensus protocol.
+		        
+		        // Send consensus message TWO (either D(true) or ?(false).
+		        send_err = sendConsensusMsgTWO(my_proposal, round_cnt, !no_consensus);
+    		    if(osOK != send_err)break; // Bail out and wait for new crane round.
+		    
+		    // Wait until received N*2/3 message TWO
+		    // TODO should we use waitforever???
+		    osThreadFlagsWait(BEN_OR_WFLAGS_MSGTWO, osFlagsWaitAll, osWaitForever);
+		    
+		        // TODO check for consensus (at least N/2 of D message)
+		            // Send crane command.
+		            send_consensus_command(consensus_value);
+		            no_consensus = false;
+		       
+		        // TODO else check for at least one D message
+		            // TODO change consensus value to value from D message
+		       
+		        // TODO else get new consensus value
+	        
+	        // Start new round if consensus was not found (else wait for new crane round).
+	    }
+	    round_cnt = 0;
 	}
 }
 
@@ -268,6 +300,35 @@ static void sendMsg(void *args)
 /**********************************************************************************************
  *	Utility functions
  **********************************************************************************************/
+static osStatus_t sendConsensusMsgONE (crane_command_t value_proposal, uint16_t round_num)
+{
+	cons_msg_t packet;
+	uint32_t wait_for_send;
+	
+	packet.messageID = CONSENSUS_MSG_ONE;
+	packet.senderAddr = AM_BROADCAST_ADDR; // Consensus messages are broadcast messages
+	packet.cons_value = value_proposal;     // Proposed consensus value (crane commands 1 - 5)
+    packet.round_num = round_num;     // Round number
+    // packet.decision = false; // Not used with msg ONE
+	
+	wait_for_send = (uint32_t)(0.5 * osKernelGetTickFreq()); // Wait half a second
+	return osMessageQueuePut(snd_msg_qID, &packet, 0, wait_for_send);
+}
+
+static osStatus_t sendConsensusMsgTWO (crane_command_t value_proposal, uint16_t round_num, bool decision)
+{
+	cons_msg_t packet;
+	uint32_t wait_for_send;
+	
+	packet.messageID = CONSENSUS_MSG_TWO;
+	packet.senderAddr = AM_BROADCAST_ADDR; // Consensus messages are broadcast messages
+	packet.cons_value = value_proposal;     // Proposed consensus value (crane commands 1 - 5)
+    packet.round_num = round_num;     // Round number
+    packet.decision = decision; // True (D) if decision was made, false (?) if not
+	
+	wait_for_send = (uint32_t)(0.5 * osKernelGetTickFreq()); // Wait half a second
+	return osMessageQueuePut(snd_msg_qID, &packet, 0, wait_for_send);
+}
 
 static void sendNextCommandMsg (crane_command_t cmd, am_addr_t dest)
 {
@@ -327,6 +388,8 @@ static uint32_t randomNumber(uint32_t rndL, uint32_t rndH)
 
 void notifyNewCraneRound()
 {
-    // TODO Initiate new consensus round
     // TODO Initiate calculation of new consensus probabilities
+
+    // Initiate new consensus round.
+    osThreadFlagsSet(ben_or_thread_id, BEN_OR_WFLAGS_CRANE);
 }

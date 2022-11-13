@@ -17,6 +17,14 @@ enum ActiveMessageIdEnum
 	AMID_SHIPCOMMUNICATION 		= 8
 };
 
+typedef enum
+{
+	SHIP_MSG_ID_NEXT_CMD 	    = 1,
+	SHIP_MSG_ID_NEXT_SHIP		= 2,
+	CONSENSUS_MSG_ONE           = 3,
+	CONSENSUS_MSG_TWO           = 4
+} ship_msg_id_t;
+
 /************************************************************
  *	Radio message structures
  ************************************************************/
@@ -34,6 +42,16 @@ typedef struct {            // Template for ship-to-ship message
 	uint32_t val32;			// Use hton32() when sending and ntoh32() when receiving, see endianness.h
 	float valf;				// Use htonf() when sending and ntohf() when receiving, see endianness.h
 } ship_msg_template_t;
+
+//---------
+#pragma pack(1)
+typedef struct {
+    uint8_t messageID;      // Type of message; either consensus message ONE or message TWO
+    am_addr_t senderAddr;
+    uint8_t cons_value;     // Proposed consensus value (these can be crane commands 1 - 5)
+    uint16_t round_num;     // Round number
+    bool decision;          // True (D), if decision reached by sender, false (?) if no decision made in this round
+}cons_msg_t;
 
 // 'Next command' message 
 #pragma pack(1)

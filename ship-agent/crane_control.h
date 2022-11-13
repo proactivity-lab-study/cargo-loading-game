@@ -17,7 +17,8 @@ typedef enum {
 	cc_to_address,		// Call crane to specified ship and place cargo.
 	cc_to_location,		// Call crane to specified location and place cargo.
 	cc_parrot_ship,		// Send same command message as specified ship.
-	cc_popular_command	// Send the command that is currently most popular.
+	cc_popular_command,	// Send the command that is currently most popular.
+	cc_only_consensus   // Don't send crane commands unless a consensus is found, then send consensus value.
 } cmd_sel_tactic_t;
 
 /**********************************************************************************************
@@ -61,6 +62,9 @@ bool getAlwaysPlaceCargo();
 // Currently these are 'cc_do_nothing', 'cc_to_address', 'cc_to_location', 'cc_parrot_ship'
 // and 'cc_popular_command'.
 void setCraneTactics(cmd_sel_tactic_t tt, am_addr_t ship_addr, loc_bundle_t loc);
+
+// Set the desired consensus value for next crane round.
+void send_consensus_command(crane_command_t cons_val);
 
 // Returns current tactical choise.
 // Possible return values are defined in crane_control.h
