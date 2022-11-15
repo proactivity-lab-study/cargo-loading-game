@@ -55,11 +55,11 @@
 
 #define SS_DEFAULT_DELAY 2 // A delay, seconds
 
-static float cv_probability[5];
+static uint8_t cv_probability[5];
 
 static osMessageQueueId_t snd_msg_qID;
 static osThreadId_t snd_task_id;
-static osMutexId_t sfgl_mutex, cmsg_1_mutex, cmsg_2_mutex;
+static osMutexId_t sfgl_mutex, cmsg_1_mutex, cmsg_2_mutex, prob_array_mutex;
 
 static comms_msg_t m_msg;
 static comms_layer_t* sradio;
@@ -98,16 +98,20 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	sfgl_mutex = osMutexNew(NULL);	// Protects fglobal_val
 	cmsg_1_mutex = osMutexNew(NULL);	// Protects database of consensus msg one type messages
 	cmsg_2_mutex = osMutexNew(NULL);	// Protects database of consensus msg one type messages
+	prob_array_mutex = osMutexNew(NULL);
 	
 	sradio = radio; 	// This is the only write, so not going to protect it with mutex
 	my_address = addr; 	// This is the only write, so not going to protect it with mutex
 	srand(osKernelGetTickCount()); // Initialise random number generator
     
-    cv_probability[0] = 0.0;
-    cv_probability[1] = 0.0;
-    cv_probability[2] = 0.0;
-    cv_probability[3] = 0.0;
-    cv_probability[4] = 0.0;
+    
+    while(osMutexAcquire(prob_array_mutex, 1000) != osOK); // Protects fglobal_val
+    cv_probability[0] = 0;
+    cv_probability[1] = 0;
+    cv_probability[2] = 0;
+    cv_probability[3] = 0;
+    cv_probability[4] = 0;
+    osMutexRelease(prob_array_mutex);
     
     clear_cons_msg_one();
     clear_cons_msg_two();
@@ -460,7 +464,7 @@ static uint16_t add_cons_msg_two(uint8_t val, uint16_t round, bool decision)
         // No overflow detection i==MAX_SHIPS!
     }
     else info1("Wrong round msg.");
-
+    
     osMutexRelease(cmsg_2_mutex);
 
     if(i == 0)return i; // Should we do something about it?
@@ -525,25 +529,30 @@ static void sendNextShipMsg (am_addr_t next_ship_addr, am_addr_t dest)
 static crane_command_t get_consensus_value()
 {
     crane_command_t val = CM_NO_COMMAND;
-    float random;
-    float step_val;
+    uint8_t random;
+    uint8_t step_val;
     
     // get random number
-    random = (float)randomNumber(0,100)/100;
+    random = randomNumber(0,100);
     
     // get consensus value based on random number
+    while(osMutexAcquire(prob_array_mutex, 1000) != osOK);
     step_val = cv_probability[0];
     for(int i = 1; i <= 5;i++)
     {
-    	if(step_val > random) // TODO what if i=5 ??
+    	if(step_val > random)
     	{
     	    val = i;
     	    break;
     	}
-    	else step_val += cv_probability[i];
+    	else if(i != 5)
+    	{
+    	    step_val += cv_probability[i];
+    	}
+    	else ; // Shouldn't get here. val = CM_NO_COMMAND
 	}
-    
-    
+	osMutexRelease(prob_array_mutex);
+
     return val;
 }
 
@@ -554,9 +563,77 @@ static uint32_t randomNumber(uint32_t rndL, uint32_t rndH)
 	return rand() % range + rndL;
 }
 
+void prob_towards_ship(loc_bundle_t ship_loc, loc_bundle_t crane_loc, bool prioritise_cargo, bool vertical_first)
+{
+    uint8_t vertical, horizontal;
+    
+    // Which two commands are right
+    
+    while(osMutexAcquire(prob_array_mutex, 1000) != osOK);
+    if(ship_loc.x == crane_loc.x && ship_loc.y == crane_loc.y)
+    {
+        if(prioritise_cargo)
+        {
+            cv_probability[CM_PLACE_CARGO-1] = 92;
+            cv_probability[CM_UP-1] = 2;
+            cv_probability[CM_DOWN-1] = 2;
+            cv_probability[CM_LEFT-1] = 2;
+            cv_probability[CM_RIGHT-1] = 2;
+            
+            osMutexRelease(prob_array_mutex);
+            return;
+        }
+    }
+    else
+    {
+        if(ship_loc.x > crane_loc.x)vertical = CM_UP;
+        else vertical = CM_DOWN;
+        
+        if(ship_loc.y > crane_loc.y)horizontal = CM_RIGHT;
+        else horizontal = CM_LEFT;
+    }
+    
+    if(vertical_first)
+    {
+        cv_probability[vertical-1] = 50;
+        cv_probability[horizontal-1] = 30;
+    }
+    else
+    {
+        cv_probability[vertical-1] = 30;
+        cv_probability[horizontal-1] = 50;
+    }
+    
+    // The rest.
+    if(vertical == CM_UP)cv_probability[vertical] = 5;
+    else cv_probability[vertical-2] = 5;
+    if(vertical == CM_LEFT)cv_probability[horizontal] = 5;
+    else cv_probability[horizontal-2] = 5;
+    
+    cv_probability[CM_PLACE_CARGO-1] = 10;
+    osMutexRelease(prob_array_mutex);
+    
+    return;
+}
+
 void notifyNewCraneRound()
 {
-    // TODO Initiate calculation of new consensus probabilities
+    loc_bundle_t ship_loc, crane_loc;
+    bool prioritise_cargo, vertical_first;
+    // Initiate calculation of new consensus probabilities
+    
+    // TODO Reconsider strategy
+    
+    // Select strategy nearest to crane.
+    // TODO Find closest to crane.
+    ship_loc.x = 20;
+    ship_loc.y = 20;
+    crane_loc.x = 30;
+    crane_loc.y = 15;
+    prioritise_cargo = vertical_first = true;
+    
+    // Generate new probability values based on closest ship strategy
+    prob_towards_ship(ship_loc, crane_loc, prioritise_cargo, vertical_first);
 
     // Initiate new consensus round.
     osThreadFlagsSet(ben_or_thread_id, BEN_OR_WFLAGS_CRANE);
