@@ -714,8 +714,8 @@ loc_bundle_t getCraneLoc()
 {
 	static loc_bundle_t craneloc;
 	while(osMutexAcquire(cloc_mutex, 1000) != osOK);
-	craneloc.x = cloc.x;
-	craneloc.y = cloc.y;
+	craneloc.x = cloc.crane_x;
+	craneloc.y = cloc.crane_y;
 	osMutexRelease(cloc_mutex);
 	return craneloc;
 }

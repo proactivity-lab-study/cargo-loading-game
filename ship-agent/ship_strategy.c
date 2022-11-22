@@ -638,13 +638,8 @@ void prob_towards_ship(loc_bundle_t ship_loc, loc_bundle_t crane_loc, bool prior
     return;
 }
 
-static uint32_t distance (am_addr_t ship1, am_addr_t ship2)
-{
-    loc_bundle_t dist1, dist2;
-    
-    dist1 = getShipLocation(ship1);
-    dist2 = getShipLocation(ship2);
-    
+static uint32_t distance (loc_bundle_t dist1, loc_bundle_t dist2)
+{    
     return abs(dist1.x - dist2.x) + abs(dist1.y - dist2.y);
 }
 
