@@ -79,4 +79,7 @@ cmd_sel_tactic_t getCraneTactics(am_addr_t *ship_addr, loc_bundle_t *loc);
 // Returns distance to crane, zero distance means crane is at location (x; y).
 uint16_t distToCrane(loc_bundle_t loc);
 
+// Returns current crane location
+loc_bundle_t getCraneLoc();
+
 #endif //CRANE_CONTROL_H_

@@ -710,6 +710,16 @@ uint16_t distToCrane(loc_bundle_t loc)
 	return dist;
 }
 
+loc_bundle_t getCraneLoc()
+{
+	static loc_bundle_t craneloc;
+	while(osMutexAcquire(cloc_mutex, 1000) != osOK);
+	craneloc.x = cloc.x;
+	craneloc.y = cloc.y;
+	osMutexRelease(cloc_mutex);
+	return craneloc;
+}
+
 static void clearCmdsBuf()
 {
 	uint8_t i;

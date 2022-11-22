@@ -207,7 +207,7 @@ static void ben_or_protocol(void *args)
 		        }
 		        else if(d_val_cnt == 1) // TODO what if 1 < d < needed_num???
                 {
-                    // TODO If at least one D message change consensus value to value from D message
+                    // If at least one D message change consensus value to value from D message
                     my_proposal = get_d_val_single();
 		        }
 		        else //No consensus and no one with D value
@@ -606,12 +606,14 @@ void prob_towards_ship(loc_bundle_t ship_loc, loc_bundle_t crane_loc, bool prior
     }
     else
     {
-        if(ship_loc.x > crane_loc.x)vertical = CM_UP;
-        else vertical = CM_DOWN;
-        
-        if(ship_loc.y > crane_loc.y)horizontal = CM_RIGHT;
+        if(ship_loc.x > crane_loc.x)horizontal = CM_RIGHT;
+        // TODO else if(ship_loc.x == crane_loc.x)horizontal = CM_NO_COMMAND;
         else horizontal = CM_LEFT;
     }
+        
+        if(ship_loc.y > crane_loc.y)vertical = CM_UP;
+        // TODO else if(ship_loc.y == crane_loc.y)horizontal = CM_NO_COMMAND;
+        else vertical = CM_DOWN;
     
     if(vertical_first)
     {
@@ -636,20 +638,62 @@ void prob_towards_ship(loc_bundle_t ship_loc, loc_bundle_t crane_loc, bool prior
     return;
 }
 
+static uint32_t distance (am_addr_t ship1, am_addr_t ship2)
+{
+    loc_bundle_t dist1, dist2;
+    
+    dist1 = getShipLocation(ship1);
+    dist2 = getShipLocation(ship2);
+    
+    return abs(dist1.x - dist2.x) + abs(dist1.y - dist2.y);
+}
+
+static am_addr_t closest_to_crane()
+{
+    loc_bundle_t crane_loc, ship_loc;
+    uint8_t num_ships, i;
+    uint16_t dist, min_dist;
+    am_addr_t saddr[MAX_SHIPS], closest_ship;
+    
+    // Get crane location
+    crane_loc = getCraneLoc();
+    
+    // Get all ships locations
+    num_ships = getAllShipsAddr(saddr, MAX_SHIPS);
+    
+    // TODO find closest ship to crane (in case of tie, selects first one found)
+    ship_loc = getShipLocation(saddr[0]);
+    min_dist = distance (ship_loc, crane_loc);
+    closest_ship = saddr[0];
+    for(i=1;i<num_ships;i++)
+    {
+        ship_loc = getShipLocation(saddr[i]);
+        dist = distance (ship_loc, crane_loc);
+        if(dist < min_dist)
+        {
+            min_dist = dist;
+            closest_ship = saddr[i];
+        }
+    }
+    return closest_ship;
+}
+
 void notifyNewCraneRound()
 {
     loc_bundle_t ship_loc, crane_loc;
     bool prioritise_cargo, vertical_first;
+    am_addr_t closest;
     // Initiate calculation of new consensus probabilities
     
     // TODO Reconsider strategy
     
     // Select strategy nearest to crane.
-    // TODO Find closest to crane.
-    ship_loc.x = 20;
-    ship_loc.y = 20;
-    crane_loc.x = 30;
-    crane_loc.y = 15;
+    // Find closest to crane.
+    closest = closest_to_crane();
+    ship_loc = getShipLocation(closest);
+    
+    crane_loc = getCraneLoc();
+    
     prioritise_cargo = vertical_first = true;
     
     // Generate new probability values based on closest ship strategy
