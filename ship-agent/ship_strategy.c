@@ -75,10 +75,15 @@ static bool cmsg_2_decision[MAX_SHIPS]; // These two ought to be in a struct.
 static uint16_t current_cmsg_1_round = 1;
 static uint16_t current_cmsg_2_round = 1;
 
+static crane_command_t get_consensus_value();
 static void clear_cons_msg_one();
 static uint16_t add_cons_msg_one(uint8_t val, uint16_t round);
 static void clear_cons_msg_two();
 static uint16_t add_cons_msg_two(uint8_t val, uint16_t round, bool decision);
+static crane_command_t get_consensus_value();
+static uint8_t get_msgone_mode(uint32_t *cons_val_mode);
+static uint8_t get_msgtwo_mode(uint32_t *cons_val_mode);
+static crane_command_t get_d_val_single();
 
 static osStatus_t sendConsensusMsgTWO (crane_command_t value_proposal, uint16_t round_num, bool decision);
 static osStatus_t sendConsensusMsgONE (crane_command_t value_proposal, uint16_t round_num);
@@ -143,8 +148,10 @@ static void ben_or_protocol(void *args)
     bool no_consensus = true;
     osStatus_t send_err;
     loc_bundle_t loc = {0,0};
-    uint32_t mode_val;
-    uint32_t mode_val_cnt;
+    uint32_t mode_val, d_mode_val;
+    uint32_t mode_val_cnt, d_val_cnt;
+    uint32_t needed_num;
+    am_addr_t saddr[MAX_SHIPS]; // Because game_status has no function that only returns number of ships
     
     //If not already, set crane tactics to cc_only_consensus
     setCraneTactics(cc_only_consensus, AM_BROADCAST_ADDR, loc);
@@ -156,11 +163,11 @@ static void ben_or_protocol(void *args)
 	    // TODO I'm interested would the Ben Or protocol work without this sync. Are round counts necessary at all in our case???
 		osThreadFlagsWait(BEN_OR_WFLAGS_CRANE, osFlagsWaitAll, osWaitForever); // osWaitForever, because without sync, no point in blindly sending messages
 		
+		// Get new consensus value
+	    my_proposal = get_consensus_value();
 		while (no_consensus)
 		{
-		    round_cnt++;
-		    // TODO get new consensus value
-		    my_proposal = CM_PLACE_CARGO;
+		    round_cnt++; // Increment current round number.
 		    
 		    // Send consensus message ONE.
 		    send_err = sendConsensusMsgONE(my_proposal, round_cnt);
@@ -170,13 +177,15 @@ static void ben_or_protocol(void *args)
 		    // TODO should we use waitforever???
 		    osThreadFlagsWait(BEN_OR_WFLAGS_MSGONE, osFlagsWaitAll, osWaitForever);
 		    
-		        // TODO check for consensus (at least N/2 of the same value)
-		        mode_val = CM_DOWN; // Dummy-value
-		        mode_val_cnt = 9; // Dummy-value
-		        no_consensus = false; // Dummy-value
+    	        // Check for consensus (at least N/2 of the same value)
+		        mode_val_cnt = get_msgone_mode(&mode_val);
+		        needed_num = getAllShipsAddr(saddr, MAX_SHIPS);
+		        needed_num = (uint8_t) ceil((float) needed_num / 2);
 		        
+		        if(mode_val_cnt >= needed_num)no_consensus = false;
+
 		        if(!no_consensus)my_proposal = mode_val;
-		        else my_proposal = CM_UP; // This actually won't matter according to the consensus protocol.
+		        else my_proposal = CM_NO_COMMAND; // This actually won't matter according to the consensus protocol.
 		        
 		        // Send consensus message TWO (either D(true) or ?(false).
 		        send_err = sendConsensusMsgTWO(my_proposal, round_cnt, !no_consensus);
@@ -186,19 +195,30 @@ static void ben_or_protocol(void *args)
 		    // TODO should we use waitforever???
 		    osThreadFlagsWait(BEN_OR_WFLAGS_MSGTWO, osFlagsWaitAll, osWaitForever);
 		    
-		        // TODO check for consensus (at least N/2 of D message)
-		            // Send crane command.
+		        // Check for consensus (at least N/2 of D message)
+		        d_val_cnt = get_msgtwo_mode(&d_mode_val);
+		        needed_num = getAllShipsAddr(saddr, MAX_SHIPS);
+		        needed_num = (uint8_t) ceil((float) needed_num / 2);
+		        
+		        if(d_val_cnt >= needed_num)
+		        {
 		            send_consensus_command(consensus_value);
 		            no_consensus = false;
-		       
-		        // TODO else check for at least one D message
-		            // TODO change consensus value to value from D message
-		       
-		        // TODO else get new consensus value
+		        }
+		        else if(d_val_cnt == 1) // TODO what if 1 < d < needed_num???
+                {
+                    // TODO If at least one D message change consensus value to value from D message
+                    my_proposal = get_d_val_single();
+		        }
+		        else //No consensus and no one with D value
+		        {
+		            // Get new consensus value.
+		            my_proposal = get_consensus_value();
+		        }
 	        
-	        // Start new round if consensus was not found (else wait for new crane round).
-	        // TODO clear consensus message database after each round!
-	        // TODO increment current round number
+	        // Clear consensus message database after each round!
+	        clear_cons_msg_one();
+	        clear_cons_msg_two();
 	    }
 	    round_cnt = 0;
 	}
@@ -232,7 +252,7 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
             // Place data to database.
             msg_count = add_cons_msg_one(cons_msg->cons_value, cons_msg->round_num);
 
-            // Check if waitcondition is fulfilled.
+            // Check if wait condition is fulfilled.
             needed_ships = getAllShipsAddr(saddr, MAX_SHIPS);
             needed_ships = ceil((float)(needed_ships * 2) / 3);
             
@@ -251,7 +271,7 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
             // Place data to database.
             msg_count = add_cons_msg_two(cons_msg->cons_value, cons_msg->round_num, cons_msg->decision);
 
-            // Check if waitcondition is fulfilled.
+            // Check if wait condition is fulfilled.
             needed_ships = getAllShipsAddr(saddr, MAX_SHIPS);
             needed_ships = ceil((float)(needed_ships * 2) / 3);
             
@@ -638,3 +658,86 @@ void notifyNewCraneRound()
     // Initiate new consensus round.
     osThreadFlagsSet(ben_or_thread_id, BEN_OR_WFLAGS_CRANE);
 }
+
+static uint8_t get_msgone_mode(uint32_t *cons_val_mode)
+{
+    uint8_t i = 0;
+    uint8_t val_cnt[5], mode_cnt, index;
+    
+    while(osMutexAcquire(cmsg_1_mutex, 1000) != osOK);
+    for(i = 0;i < MAX_SHIPS;i++)
+    {
+        index = cmsg_1_val[i];
+        if(cmsg_1_val[i] > 0 && cmsg_1_val[i] <= CM_PLACE_CARGO)
+        {
+            val_cnt[index-1]++;
+        }
+    }
+	osMutexRelease(cmsg_1_mutex);
+
+	mode_cnt = val_cnt[0];
+	*cons_val_mode = CM_UP; // CM_UP == 1
+	for(i = 1;i < CM_PLACE_CARGO;i++)
+    {
+        if(mode_cnt < val_cnt[i])
+        {
+            mode_cnt = val_cnt[i];
+            *cons_val_mode = i+1;
+        }   
+    }
+    
+    return mode_cnt;
+}
+
+static uint8_t get_msgtwo_mode(uint32_t *cons_val_d)
+{
+    uint8_t i = 0;
+    uint8_t d_val_cnt[5], mode_cnt, index;
+    
+    while(osMutexAcquire(cmsg_2_mutex, 1000) != osOK);
+    for(i = 0;i < MAX_SHIPS;i++)
+    {
+        if(cmsg_2_decision[i])
+        {
+            if(cmsg_2_val[i] > 0 && cmsg_2_val[i] <= CM_PLACE_CARGO)
+            {
+                index = cmsg_2_val[i];
+                d_val_cnt[index-1]++;
+            }
+        }
+    }
+	osMutexRelease(cmsg_2_mutex);
+
+	mode_cnt = d_val_cnt[0];
+	*cons_val_d = CM_UP; // CM_UP == 1
+	for(i = 1;i < CM_PLACE_CARGO;i++)
+    {
+        if(mode_cnt < d_val_cnt[i])
+        {
+            mode_cnt = d_val_cnt[i];
+            *cons_val_d = i+1;
+        }   
+    }
+    
+    return mode_cnt;
+}
+
+static crane_command_t get_d_val_single()
+{
+    uint8_t i = 0;
+    crane_command_t val;
+    
+    while(osMutexAcquire(cmsg_2_mutex, 1000) != osOK);
+    for(i = 0;i < MAX_SHIPS;i++)
+    {
+        if(cmsg_2_decision[i])
+        {
+            val = cmsg_2_val[i];
+            break;
+        }
+    }
+	osMutexRelease(cmsg_2_mutex);
+
+	return val;
+}
+
