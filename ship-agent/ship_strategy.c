@@ -109,7 +109,7 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 	my_address = addr; 	// This is the only write, so not going to protect it with mutex
 	srand(osKernelGetTickCount()); // Initialise random number generator
     
-    
+    info4("Ship strategy init");
     while(osMutexAcquire(prob_array_mutex, 1000) != osOK); // Protects fglobal_val
     cv_probability[0] = 0;
     cv_probability[1] = 0;
@@ -150,7 +150,7 @@ static void ben_or_protocol(void *args)
     loc_bundle_t loc = {0,0};
     uint32_t mode_val, d_mode_val;
     uint32_t mode_val_cnt, d_val_cnt;
-    uint32_t needed_num;
+    uint32_t needed_num, flags;
     am_addr_t saddr[MAX_SHIPS]; // Because game_status has no function that only returns number of ships
     
     //If not already, set crane tactics to cc_only_consensus
@@ -175,8 +175,9 @@ static void ben_or_protocol(void *args)
 		    
 		    // Wait until received N*2/3 message ONE.
 		    // TODO should we use waitforever???
-		    osThreadFlagsWait(BEN_OR_WFLAGS_MSGONE, osFlagsWaitAll, osWaitForever);
-		    
+		    info4("Waiting for msg 1 - %lu", round_cnt);
+		    flags = osThreadFlagsWait(BEN_OR_WFLAGS_MSGONE, osFlagsWaitAll, osWaitForever);
+		    info4("a %u", flags);
     	        // Check for consensus (at least N/2 of the same value)
 		        mode_val_cnt = get_msgone_mode(&mode_val);
 		        needed_num = getAllShipsAddr(saddr, MAX_SHIPS);
@@ -186,14 +187,14 @@ static void ben_or_protocol(void *args)
 
 		        if(!no_consensus)my_proposal = mode_val;
 		        else my_proposal = CM_NO_COMMAND; // This actually won't matter according to the consensus protocol.
-		        
+		        info4("about to send msg 2");
 		        // Send consensus message TWO (either D(true) or ?(false).
 		        send_err = sendConsensusMsgTWO(my_proposal, round_cnt, !no_consensus);
     		    if(osOK != send_err)break; // Bail out and wait for new crane round.
-		    
+		    info4("Waiting for msg 2 - %u", no_consensus);
 		    // Wait until received N*2/3 message TWO
 		    // TODO should we use waitforever???
-		    osThreadFlagsWait(BEN_OR_WFLAGS_MSGTWO, osFlagsWaitAll, osWaitForever);
+		    flags = osThreadFlagsWait(BEN_OR_WFLAGS_MSGTWO, osFlagsWaitAll, osWaitForever);
 		    
 		        // Check for consensus (at least N/2 of D message)
 		        d_val_cnt = get_msgtwo_mode(&d_mode_val);
@@ -204,16 +205,19 @@ static void ben_or_protocol(void *args)
 		        {
 		            send_consensus_command(consensus_value);
 		            no_consensus = false;
+		            info4("consensus");
 		        }
 		        else if(d_val_cnt == 1) // TODO what if 1 < d < needed_num???
                 {
                     // If at least one D message change consensus value to value from D message
                     my_proposal = get_d_val_single();
+                    info4("allmost consensus");
 		        }
 		        else //No consensus and no one with D value
 		        {
 		            // Get new consensus value.
 		            my_proposal = get_consensus_value();
+		            info4("no consensus");
 		        }
 	        
 	        // Clear consensus message database after each round!
@@ -248,14 +252,15 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
         case CONSENSUS_MSG_ONE :
          
             cons_msg = (cons_msg_t*)comms_get_payload(comms, msg, sizeof(cons_msg_t));
-            
+            info4("RecMsg1 %u %u", cons_msg->cons_value, ntoh16(cons_msg->senderAddr));
             // Place data to database.
-            msg_count = add_cons_msg_one(cons_msg->cons_value, cons_msg->round_num);
+            msg_count = add_cons_msg_one(cons_msg->cons_value, ntoh16(cons_msg->round_num));
 
             // Check if wait condition is fulfilled.
             needed_ships = getAllShipsAddr(saddr, MAX_SHIPS);
-            needed_ships = ceil((float)(needed_ships * 2) / 3);
-            
+            info4("needed 1 %u", needed_ships);
+            needed_ships = ceil((float)((needed_ships - 1) * 2) / 3);
+            info4("needed 2 %u ? %u", needed_ships, msg_count);
             if(msg_count >= needed_ships)
             {
                 // Wake up consensus algorithm thread.
@@ -267,13 +272,13 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
         case CONSENSUS_MSG_TWO :
          
             cons_msg = (cons_msg_t*)comms_get_payload(comms, msg, sizeof(cons_msg_t));
-            
+            info4("RecMsg2 %u %u", cons_msg->cons_value, ntoh16(cons_msg->senderAddr));
             // Place data to database.
-            msg_count = add_cons_msg_two(cons_msg->cons_value, cons_msg->round_num, cons_msg->decision);
+            msg_count = add_cons_msg_two(cons_msg->cons_value, ntoh16(cons_msg->round_num), cons_msg->decision);
 
             // Check if wait condition is fulfilled.
             needed_ships = getAllShipsAddr(saddr, MAX_SHIPS);
-            needed_ships = ceil((float)(needed_ships * 2) / 3);
+            needed_ships = ceil((float)((needed_ships-1) * 2) / 3);
             
             if(msg_count >= needed_ships)
             {
@@ -341,6 +346,7 @@ static void sendMsg(void *args)
             // Ben-Or consensus algorithm message one and two get handled the same way.
             case CONSENSUS_MSG_ONE :
             case CONSENSUS_MSG_TWO :
+            
             cons_msg = (cons_msg_t *)comms_get_payload(sradio, &m_msg, sizeof(cons_msg_t));
             if (cons_msg == NULL)
             {
@@ -349,6 +355,7 @@ static void sendMsg(void *args)
 
             cons_pkt = (cons_msg_t*)packet;
             cons_msg->messageID = cons_pkt->messageID;
+            info4("Sending msg %u", cons_pkt->messageID);
             cons_msg->senderAddr = hton16(my_address);
             cons_msg->cons_value = cons_pkt->cons_value;
             cons_msg->round_num = hton16(cons_pkt->round_num);
@@ -425,7 +432,7 @@ static void clear_cons_msg_one()
 
 static uint16_t add_cons_msg_one(uint8_t val, uint16_t round)
 {
-    uint16_t i = 0;
+    uint16_t i = MAX_SHIPS;
 
     while(osMutexAcquire(cmsg_1_mutex, 1000) != osOK);
 
@@ -441,12 +448,11 @@ static uint16_t add_cons_msg_one(uint8_t val, uint16_t round)
         }
         // No overflow detection i==MAX_SHIPS!
     }
-    else info1("Wrong round msg.");
+    else info4("Wrong round msg.");
 
     osMutexRelease(cmsg_1_mutex);
 
-    if(i == 0)return i; // Should we do something about it?
-    else return i+1;
+    return i+1;
 }
 
 static void clear_cons_msg_two()
@@ -466,7 +472,7 @@ static void clear_cons_msg_two()
 
 static uint16_t add_cons_msg_two(uint8_t val, uint16_t round, bool decision)
 {
-    uint16_t i = 0;
+    uint16_t i = MAX_SHIPS;
 
     while(osMutexAcquire(cmsg_2_mutex, 1000) != osOK);
 
@@ -487,8 +493,7 @@ static uint16_t add_cons_msg_two(uint8_t val, uint16_t round, bool decision)
     
     osMutexRelease(cmsg_2_mutex);
 
-    if(i == 0)return i; // Should we do something about it?
-    else return i+1;
+    return i+1;
 }
 
 

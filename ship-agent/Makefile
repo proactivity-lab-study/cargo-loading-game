@@ -35,7 +35,7 @@ CFLAGS                  += -D_RTE_=1
 RELEASE_BUILD           ?= 0
 
 # Set the lll verbosity base level
-CFLAGS                  += -DBASE_LOG_LEVEL=0xFFFF
+CFLAGS                  += -DBASE_LOG_LEVEL=LOG_INFO4
 #CFLAGS                  += -DBASE_LOG_LEVEL=LOG_MASK_INFO
 
 # Enable debug messages

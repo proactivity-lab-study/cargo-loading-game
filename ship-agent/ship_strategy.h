@@ -23,9 +23,9 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
 
 typedef enum 
 {
-    BEN_OR_WFLAGS_CRANE     = 1,
-    BEN_OR_WFLAGS_MSGONE    = 2,
-    BEN_OR_WFLAGS_MSGTWO    = 3
+    BEN_OR_WFLAGS_CRANE     = 1, //001
+    BEN_OR_WFLAGS_MSGONE    = 2, //010
+    BEN_OR_WFLAGS_MSGTWO    = 4  //100
 }benor_proto_wflags_t;
 
 void notifyNewCraneRound();
