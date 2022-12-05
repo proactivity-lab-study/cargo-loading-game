@@ -143,9 +143,12 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
 
 static void ben_or_protocol(void *args)
 {
+    #define MSG_ONE_WAIT_TIME 0.5F // Wait time in seconds
+    #define MSG_TWO_WAIT_TIME 0.5F // Wait time in seconds
+    
     crane_command_t my_proposal, consensus_value = CM_LEFT;
-    uint16_t round_cnt = 0;
-    bool no_consensus = true;
+    uint16_t round_cnt = 0, send_msg_one_count = 0, send_msg_two_count = 0;
+    bool no_consensus = true, msg_one_OK = false, msg_two_OK = false;
     osStatus_t send_err;
     loc_bundle_t loc = {0,0};
     uint32_t mode_val, d_mode_val;
@@ -172,54 +175,111 @@ static void ben_or_protocol(void *args)
 		    // Send consensus message ONE.
 		    send_err = sendConsensusMsgONE(my_proposal, round_cnt);
 		    if(osOK != send_err)break; // Bail out and wait for new crane round.
-		    
-		    // Wait until received N*2/3 message ONE.
-		    // TODO should we use waitforever???
-		    info4("Waiting for msg 1 - %lu", round_cnt);
-		    flags = osThreadFlagsWait(BEN_OR_WFLAGS_MSGONE, osFlagsWaitAll, osWaitForever);
-		    info4("a %u", flags);
-    	        // Check for consensus (at least N/2 of the same value)
-		        mode_val_cnt = get_msgone_mode(&mode_val);
-		        needed_num = getAllShipsAddr(saddr, MAX_SHIPS);
-		        needed_num = (uint8_t) ceil((float) needed_num / 2);
-		        
-		        if(mode_val_cnt >= needed_num)no_consensus = false;
 
-		        if(!no_consensus)my_proposal = mode_val;
-		        else my_proposal = CM_NO_COMMAND; // This actually won't matter according to the consensus protocol.
-		        info4("about to send msg 2");
-		        // Send consensus message TWO (either D(true) or ?(false).
-		        send_err = sendConsensusMsgTWO(my_proposal, round_cnt, !no_consensus);
-    		    if(osOK != send_err)break; // Bail out and wait for new crane round.
-		    info4("Waiting for msg 2 - %u", no_consensus);
-		    // Wait until received N*2/3 message TWO
-		    // TODO should we use waitforever???
-		    flags = osThreadFlagsWait(BEN_OR_WFLAGS_MSGTWO, osFlagsWaitAll, osWaitForever);
-		    
-		        // Check for consensus (at least N/2 of D message)
-		        d_val_cnt = get_msgtwo_mode(&d_mode_val);
-		        needed_num = getAllShipsAddr(saddr, MAX_SHIPS);
-		        needed_num = (uint8_t) ceil((float) needed_num / 2);
+		    msg_one_OK = false;
+		    while(!msg_one_OK)
+		    {
+	            // Wait until received N*2/3 message ONE or send msgONE again if 500 ms have passed.
+	            info4("Waiting for msg 1 - %lu", round_cnt);
+	            flags = osThreadFlagsWait(BEN_OR_WFLAGS_MSGONE, osFlagsWaitAll, (uint32_t) (MSG_ONE_WAIT_TIME * osKernelGetTickFreq()));
+		        info4("a %u", flags);
+		        if(flags == osFlagsErrorTimeout)
+		        {
+		            // Send msg ONE again
+		            if(send_msg_one_count < 1)
+		            {
+		                // Send consensus message ONE.
+		                send_err = sendConsensusMsgONE(my_proposal, round_cnt);
+		                if(osOK != send_err)
+		                {   
+		                    send_msg_one_count = 0;
+		                    break; // Bail out and wait for new crane round
+		                }
+		                else send_msg_one_count++;
+		            }
+		            else
+		            {
+		                send_msg_one_count = 0;
+		                send_err = osErrorResource; // Hack to get out of second while(no_consensus) loop.
+		                break; // Bail out and wait for new crane round
+		            }
+		        }
+		        else
+		        {
+        	        // Check for consensus (at least N/2 of the same value)
+		            mode_val_cnt = get_msgone_mode(&mode_val);
+		            needed_num = getAllShipsAddr(saddr, MAX_SHIPS);
+		            needed_num = (uint8_t) ceil((float) needed_num / 2);
+		            
+		            if(mode_val_cnt >= needed_num)no_consensus = false;
+
+		            if(!no_consensus)my_proposal = mode_val;
+		            else my_proposal = CM_NO_COMMAND; // This actually won't matter according to the consensus protocol.
+		            info4("about to send msg 2");
+		            // Send consensus message TWO (either D(true) or ?(false).
+		            send_err = sendConsensusMsgTWO(my_proposal, round_cnt, !no_consensus);
+        		    if(osOK != send_err)break; // Bail out and wait for new crane round.
+        		    else msg_one_OK = true;
+        		}
+        	}
+    		if(osOK != send_err)break; // Bail out and wait for new crane round.
+    		
+    		msg_two_OK = false;
+		    while(!msg_two_OK)
+		    {
+		        info4("Waiting for msg 2 - %u", no_consensus);
+		        // Wait until received N*2/3 message TWO
+		        flags = osThreadFlagsWait(BEN_OR_WFLAGS_MSGTWO, osFlagsWaitAll, (uint32_t) (MSG_TWO_WAIT_TIME * osKernelGetTickFreq()));
 		        
-		        if(d_val_cnt >= needed_num)
+		        if(flags == osFlagsErrorTimeout)
 		        {
-		            send_consensus_command(consensus_value);
-		            no_consensus = false;
-		            info4("consensus");
+		            // Send msg TWO again
+		            if(send_msg_two_count < 1)
+		            {
+		                // Send consensus message TWO.
+		                send_err = sendConsensusMsgTWO(my_proposal, round_cnt, !no_consensus);
+		                if(osOK != send_err)
+		                {   
+		                    send_msg_two_count = 0;
+		                    break; // Bail out and wait for new crane round
+		                }
+		                else send_msg_two_count++;
+		            }
+		            else
+		            {
+		                send_msg_two_count = 0;
+		                send_err = osErrorResource; // Hack to get out of second while(no_consensus) loop.
+		                break; // Bail out and wait for new crane round
+		            }
 		        }
-		        else if(d_val_cnt == 1) // TODO what if 1 < d < needed_num???
-                {
-                    // If at least one D message change consensus value to value from D message
-                    my_proposal = get_d_val_single();
-                    info4("allmost consensus");
-		        }
-		        else //No consensus and no one with D value
+		        else
 		        {
-		            // Get new consensus value.
-		            my_proposal = get_consensus_value();
-		            info4("no consensus");
+		            // Check for consensus (at least N/2 of D message)
+		            d_val_cnt = get_msgtwo_mode(&d_mode_val);
+		            needed_num = getAllShipsAddr(saddr, MAX_SHIPS);
+		            needed_num = (uint8_t) ceil((float) needed_num / 2);
+		            
+		            if(d_val_cnt >= needed_num)
+		            {
+		                send_consensus_command(consensus_value);
+		                no_consensus = false;
+		                info4("consensus");
+		            }
+		            else if(d_val_cnt == 1) // TODO what if 1 < d < needed_num???
+                    {
+                        // If at least one D message change consensus value to value from D message
+                        my_proposal = get_d_val_single();
+                        info4("allmost consensus");
+		            }
+		            else //No consensus and no one with D value
+		            {
+		                // Get new consensus value.
+		                my_proposal = get_consensus_value();
+		                info4("no consensus");
+		            }
+		            msg_two_OK = true;
 		        }
-	        
+	        }
 	        // Clear consensus message database after each round!
 	        clear_cons_msg_one();
 	        clear_cons_msg_two();
@@ -661,18 +721,24 @@ static am_addr_t closest_to_crane()
     // Get all ships locations
     num_ships = getAllShipsAddr(saddr, MAX_SHIPS);
     
-    // TODO find closest ship to crane (in case of tie, selects first one found)
-    ship_loc = getShipLocation(saddr[0]);
-    min_dist = distance (ship_loc, crane_loc);
-    closest_ship = saddr[0];
+    // Find closest ship to crane (in case of tie, selects first one found) (ignore ships with cargo)
+    if(getCargoStatus(saddr[0]) != cs_cargo_received)
+    {
+        ship_loc = getShipLocation(saddr[0]);
+        min_dist = distance (ship_loc, crane_loc);
+        closest_ship = saddr[0];
+    }
     for(i=1;i<num_ships;i++)
     {
-        ship_loc = getShipLocation(saddr[i]);
-        dist = distance (ship_loc, crane_loc);
-        if(dist < min_dist)
+        if(getCargoStatus(saddr[i]) != cs_cargo_received)
         {
-            min_dist = dist;
-            closest_ship = saddr[i];
+            ship_loc = getShipLocation(saddr[i]);
+            dist = distance (ship_loc, crane_loc);
+            if(dist < min_dist)
+            {
+                min_dist = dist;
+                closest_ship = saddr[i];
+            }
         }
     }
     return closest_ship;
@@ -688,18 +754,16 @@ void notifyNewCraneRound()
     // TODO Reconsider strategy
     
     // Select strategy nearest to crane.
-    // Find closest to crane.
+    // Find closest to crane without cargo.
     closest = closest_to_crane();
     ship_loc = getShipLocation(closest);
-    
     crane_loc = getCraneLoc();
-    
     prioritise_cargo = vertical_first = true;
     
     // Generate new probability values based on closest ship strategy
     prob_towards_ship(ship_loc, crane_loc, prioritise_cargo, vertical_first);
 
-    // Initiate new consensus round.
+    // Start new consensus finding round.
     osThreadFlagsSet(ben_or_thread_id, BEN_OR_WFLAGS_CRANE);
 }
 
