@@ -263,7 +263,7 @@ static void ben_or_protocol(void *args)
 		            {
 		                send_consensus_command(consensus_value);
 		                no_consensus = false;
-		                info4("consensus");
+		                info4("consensus %u", consensus_value);
 		            }
 		            else if(d_val_cnt == 1) // TODO what if 1 < d < needed_num???
                     {
@@ -285,6 +285,7 @@ static void ben_or_protocol(void *args)
 	        clear_cons_msg_two();
 	    }
 	    round_cnt = 0;
+	    no_consensus = true;
 	}
 }
 
