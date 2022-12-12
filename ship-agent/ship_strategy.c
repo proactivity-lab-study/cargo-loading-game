@@ -261,13 +261,16 @@ static void ben_or_protocol(void *args)
 		            
 		            if(d_val_cnt >= needed_num)
 		            {
+		                // TODO validity check of consensus value is it a legal value
+		                // TODO validity check of consensus value are all received values the same
+		                consensus_value = get_d_val_single();
 		                send_consensus_command(consensus_value);
 		                no_consensus = false;
 		                info4("consensus %u", consensus_value);
 		            }
 		            else if(d_val_cnt == 1) // TODO what if 1 < d < needed_num???
                     {
-                        // If at least one D message change consensus value to value from D message
+                        // If at least one D message change consensus value to value from D message.
                         my_proposal = get_d_val_single();
                         info4("allmost consensus");
 		            }
@@ -557,7 +560,6 @@ static uint16_t add_cons_msg_two(uint8_t val, uint16_t round, bool decision)
     return i+1;
 }
 
-
 static osStatus_t sendConsensusMsgONE (crane_command_t value_proposal, uint16_t round_num)
 {
 	cons_msg_t packet;
@@ -612,6 +614,7 @@ static void sendNextShipMsg (am_addr_t next_ship_addr, am_addr_t dest)
 	info1("Send next ship msg");
 }
 
+// Randomly get a consensus value for next round of consensus negotiations.
 static crane_command_t get_consensus_value()
 {
     crane_command_t val = CM_NO_COMMAND;
@@ -649,6 +652,7 @@ static uint32_t randomNumber(uint32_t rndL, uint32_t rndH)
 	return rand() % range + rndL;
 }
 
+// Populate probability matrix for all legal crane commands (Up, Down, Left, Right, PlaceCargo).
 void prob_towards_ship(loc_bundle_t ship_loc, loc_bundle_t crane_loc, bool prioritise_cargo, bool vertical_first)
 {
     uint8_t vertical, horizontal;
@@ -831,6 +835,8 @@ static uint8_t get_msgtwo_mode(uint32_t *cons_val_d)
     return mode_cnt;
 }
 
+// If a D message exists among received consensus message two messages, then return 
+// consensus value of this message.
 static crane_command_t get_d_val_single()
 {
     uint8_t i = 0;
