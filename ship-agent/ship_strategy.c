@@ -120,8 +120,6 @@ void initShipStrategy(comms_layer_t* radio, am_addr_t addr)
     
     clear_cons_msg_one();
     clear_cons_msg_two();
-    current_cmsg_1_round = 1;
-    current_cmsg_2_round = 1;
     
 	while(osMutexAcquire(sfgl_mutex, 1000) != osOK); // Protects fglobal_val
 	fglobal_val = 0;
@@ -151,7 +149,7 @@ static void ben_or_protocol(void *args)
     bool no_consensus = true, msg_one_OK = false, msg_two_OK = false;
     osStatus_t send_err;
     loc_bundle_t loc = {0,0};
-    uint32_t mode_val, d_mode_val;
+    uint32_t mode_val, d_mode_val, mode_cnt;
     uint32_t mode_val_cnt, d_val_cnt;
     uint32_t needed_num, flags;
     am_addr_t saddr[MAX_SHIPS]; // Because game_status has no function that only returns number of ships
@@ -168,9 +166,17 @@ static void ben_or_protocol(void *args)
 		
 		// Get new consensus value
 	    my_proposal = get_consensus_value();
+	    info4("my prop %u", my_proposal);
 		while (no_consensus)
 		{
 		    round_cnt++; // Increment current round number.
+		    while(osMutexAcquire(cmsg_1_mutex, 1000) != osOK);
+		    current_cmsg_1_round = round_cnt;
+		    osMutexRelease(cmsg_1_mutex);
+		    
+		    while(osMutexAcquire(cmsg_2_mutex, 1000) != osOK);
+		    current_cmsg_2_round = round_cnt;
+		    osMutexRelease(cmsg_2_mutex);
 		    
 		    // Send consensus message ONE.
 		    send_err = sendConsensusMsgONE(my_proposal, round_cnt);
@@ -180,9 +186,9 @@ static void ben_or_protocol(void *args)
 		    while(!msg_one_OK)
 		    {
 	            // Wait until received N*2/3 message ONE or send msgONE again if 500 ms have passed.
-	            info4("Waiting for msg 1 - %lu", round_cnt);
+	            //info4("Waiting for msg 1 - %lu", round_cnt);
 	            flags = osThreadFlagsWait(BEN_OR_WFLAGS_MSGONE, osFlagsWaitAll, (uint32_t) (MSG_ONE_WAIT_TIME * osKernelGetTickFreq()));
-		        info4("a %u", flags);
+		        //info4("a %u", flags);
 		        if(flags == osFlagsErrorTimeout)
 		        {
 		            // Send msg ONE again
@@ -227,7 +233,7 @@ static void ben_or_protocol(void *args)
     		msg_two_OK = false;
 		    while(!msg_two_OK)
 		    {
-		        info4("Waiting for msg 2 - %u", no_consensus);
+		        //info4("Waiting for msg 2 - %u", no_consensus);
 		        // Wait until received N*2/3 message TWO
 		        flags = osThreadFlagsWait(BEN_OR_WFLAGS_MSGTWO, osFlagsWaitAll, (uint32_t) (MSG_TWO_WAIT_TIME * osKernelGetTickFreq()));
 		        
@@ -263,8 +269,8 @@ static void ben_or_protocol(void *args)
 		            {
 		                // TODO validity check of consensus value is it a legal value
 		                // TODO validity check of consensus value are all received values the same
-		                consensus_value = get_d_val_single();
-		                send_consensus_command(consensus_value);
+		                mode_cnt = get_msgtwo_mode(&consensus_value);
+		                if(mode_cnt != 0)send_consensus_command(consensus_value);
 		                no_consensus = false;
 		                info4("consensus %u", consensus_value);
 		            }
@@ -286,6 +292,7 @@ static void ben_or_protocol(void *args)
 	        // Clear consensus message database after each round!
 	        clear_cons_msg_one();
 	        clear_cons_msg_two();
+	        osThreadFlagsClear(BEN_OR_WFLAGS_MSGONE | BEN_OR_WFLAGS_MSGTWO);
 	    }
 	    round_cnt = 0;
 	    no_consensus = true;
@@ -316,15 +323,15 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
         case CONSENSUS_MSG_ONE :
          
             cons_msg = (cons_msg_t*)comms_get_payload(comms, msg, sizeof(cons_msg_t));
-            info4("RecMsg1 %u %u", cons_msg->cons_value, ntoh16(cons_msg->senderAddr));
+           //info4("RecMsg1 %u %u", cons_msg->cons_value, ntoh16(cons_msg->senderAddr));
             // Place data to database.
             msg_count = add_cons_msg_one(cons_msg->cons_value, ntoh16(cons_msg->round_num));
 
             // Check if wait condition is fulfilled.
             needed_ships = getAllShipsAddr(saddr, MAX_SHIPS);
-            info4("needed 1 %u", needed_ships);
+            //info4("needed 1 %u", needed_ships);
             needed_ships = ceil((float)((needed_ships - 1) * 2) / 3);
-            info4("needed 2 %u ? %u", needed_ships, msg_count);
+            //info4("needed 2 %u ? %u", needed_ships, msg_count);
             if(msg_count >= needed_ships)
             {
                 // Wake up consensus algorithm thread.
@@ -336,10 +343,11 @@ void ship2ShipReceiveMessage(comms_layer_t* comms, const comms_msg_t* msg, void*
         case CONSENSUS_MSG_TWO :
          
             cons_msg = (cons_msg_t*)comms_get_payload(comms, msg, sizeof(cons_msg_t));
-            info4("RecMsg2 %u %u", cons_msg->cons_value, ntoh16(cons_msg->senderAddr));
+            info4("RecMsg2 %u %u %u", cons_msg->cons_value, cons_msg->decision, ntoh16(cons_msg->senderAddr));
             // Place data to database.
+            
             msg_count = add_cons_msg_two(cons_msg->cons_value, ntoh16(cons_msg->round_num), cons_msg->decision);
-
+            info4("MSG2 cnt %u", msg_count);
             // Check if wait condition is fulfilled.
             needed_ships = getAllShipsAddr(saddr, MAX_SHIPS);
             needed_ships = ceil((float)((needed_ships-1) * 2) / 3);
@@ -499,21 +507,19 @@ static uint16_t add_cons_msg_one(uint8_t val, uint16_t round)
     uint16_t i = MAX_SHIPS;
 
     while(osMutexAcquire(cmsg_1_mutex, 1000) != osOK);
-
-    if(round == current_cmsg_1_round)
+    for(i = 0;i < MAX_SHIPS;i++)
     {
-        for(i = 0;i < MAX_SHIPS;i++)
+        if(cmsg_1_val[i] == 0)
         {
-            if(cmsg_1_val[i] == 0)
+            if(round == current_cmsg_1_round)
             {
                 cmsg_1_val[i] = val;
                 break;
             }
+            else info4("Wrong round msg. %u", round);
         }
-        // No overflow detection i==MAX_SHIPS!
     }
-    else info4("Wrong round msg.");
-
+    // No overflow detection i==MAX_SHIPS!
     osMutexRelease(cmsg_1_mutex);
 
     return i+1;
@@ -539,22 +545,21 @@ static uint16_t add_cons_msg_two(uint8_t val, uint16_t round, bool decision)
     uint16_t i = MAX_SHIPS;
 
     while(osMutexAcquire(cmsg_2_mutex, 1000) != osOK);
-
-    if(round == current_cmsg_2_round)
+    for(i = 0;i < MAX_SHIPS;i++)
     {
-        for(i = 0;i < MAX_SHIPS;i++)
+        if(cmsg_2_val[i] == 0)
         {
-            if(cmsg_2_val[i] == 0)
+            if(round == current_cmsg_2_round)
             {
+                info4("INDEX %u", i);
                 cmsg_2_val[i] = val;
                 cmsg_2_decision[i] = decision;
                 break;
             }
+            else info1("Wrong round msg. %u", round);
         }
-        // No overflow detection i==MAX_SHIPS!
     }
-    else info1("Wrong round msg.");
-    
+    // No overflow detection i==MAX_SHIPS!
     osMutexRelease(cmsg_2_mutex);
 
     return i+1;
@@ -623,12 +628,13 @@ static crane_command_t get_consensus_value()
     
     // get random number
     random = randomNumber(0,100);
-    
+    //info4("rando %u", random);
     // get consensus value based on random number
     while(osMutexAcquire(prob_array_mutex, 1000) != osOK);
     step_val = cv_probability[0];
     for(int i = 1; i <= 5;i++)
     {
+    //info4("step %u", step_val);
     	if(step_val > random)
     	{
     	    val = i;
@@ -656,11 +662,13 @@ static uint32_t randomNumber(uint32_t rndL, uint32_t rndH)
 void prob_towards_ship(loc_bundle_t ship_loc, loc_bundle_t crane_loc, bool prioritise_cargo, bool vertical_first)
 {
     uint8_t vertical, horizontal;
+    cargo_status_t cargo_status;
     
+    cargo_status = getCargoStatus(getShipAddr(ship_loc));
     // Which two commands are right
     
     while(osMutexAcquire(prob_array_mutex, 1000) != osOK);
-    if(ship_loc.x == crane_loc.x && ship_loc.y == crane_loc.y)
+    if(ship_loc.x == crane_loc.x && ship_loc.y == crane_loc.y && cargo_status != cs_cargo_received)
     {
         if(prioritise_cargo)
         {
@@ -677,32 +685,52 @@ void prob_towards_ship(loc_bundle_t ship_loc, loc_bundle_t crane_loc, bool prior
     else
     {
         if(ship_loc.x > crane_loc.x)horizontal = CM_RIGHT;
-        // TODO else if(ship_loc.x == crane_loc.x)horizontal = CM_NO_COMMAND;
+        //else if(ship_loc.x == crane_loc.x)horizontal = CM_NO_COMMAND;
         else horizontal = CM_LEFT;
-    }
+    
         
         if(ship_loc.y > crane_loc.y)vertical = CM_UP;
-        // TODO else if(ship_loc.y == crane_loc.y)horizontal = CM_NO_COMMAND;
+        //else if(ship_loc.y == crane_loc.y)horizontal = CM_NO_COMMAND;
         else vertical = CM_DOWN;
     
-    if(vertical_first)
-    {
-        cv_probability[vertical-1] = 50;
-        cv_probability[horizontal-1] = 30;
-    }
-    else
-    {
-        cv_probability[vertical-1] = 30;
-        cv_probability[horizontal-1] = 50;
-    }
     
-    // The rest.
-    if(vertical == CM_UP)cv_probability[vertical] = 5;
-    else cv_probability[vertical-2] = 5;
-    if(vertical == CM_LEFT)cv_probability[horizontal] = 5;
-    else cv_probability[horizontal-2] = 5;
     
-    cv_probability[CM_PLACE_CARGO-1] = 10;
+        if(vertical_first)
+        {
+             if(ship_loc.y == crane_loc.y)
+             {
+                cv_probability[vertical-1] = 30;
+                cv_probability[horizontal-1] = 50;
+             }
+             else
+             {
+                cv_probability[vertical-1] = 50;
+                cv_probability[horizontal-1] = 30;
+             }
+        }
+        else
+        {
+            if(ship_loc.x == crane_loc.x)
+            {
+                cv_probability[vertical-1] = 50;
+                cv_probability[horizontal-1] = 30;
+            }
+            else
+            {
+                cv_probability[vertical-1] = 30;
+                cv_probability[horizontal-1] = 50;
+            }
+        }
+        
+        // The rest.
+        if(vertical == CM_UP)cv_probability[vertical] = 5;
+        else cv_probability[vertical-2] = 5;
+        
+        if(horizontal == CM_LEFT)cv_probability[horizontal] = 5;
+        else cv_probability[horizontal-2] = 5;
+        
+        cv_probability[CM_PLACE_CARGO-1] = 10;
+    }
     osMutexRelease(prob_array_mutex);
     
     return;
@@ -761,6 +789,7 @@ void notifyNewCraneRound()
     // Select strategy nearest to crane.
     // Find closest to crane without cargo.
     closest = closest_to_crane();
+    info4("closest %lu", closest);
     ship_loc = getShipLocation(closest);
     crane_loc = getCraneLoc();
     prioritise_cargo = vertical_first = true;
@@ -775,7 +804,8 @@ void notifyNewCraneRound()
 static uint8_t get_msgone_mode(uint32_t *cons_val_mode)
 {
     uint8_t i = 0;
-    uint8_t val_cnt[5], mode_cnt, index;
+    uint8_t val_cnt[] = {0,0,0,0,0};
+    uint8_t mode_cnt, index;
     
     while(osMutexAcquire(cmsg_1_mutex, 1000) != osOK);
     for(i = 0;i < MAX_SHIPS;i++)
@@ -805,7 +835,7 @@ static uint8_t get_msgone_mode(uint32_t *cons_val_mode)
 static uint8_t get_msgtwo_mode(uint32_t *cons_val_d)
 {
     uint8_t i = 0;
-    uint8_t d_val_cnt[5], mode_cnt, index;
+    uint8_t d_val_cnt[] = {0,0,0,0,0}, mode_cnt, index;
     
     while(osMutexAcquire(cmsg_2_mutex, 1000) != osOK);
     for(i = 0;i < MAX_SHIPS;i++)
@@ -817,19 +847,35 @@ static uint8_t get_msgtwo_mode(uint32_t *cons_val_d)
                 index = cmsg_2_val[i];
                 d_val_cnt[index-1]++;
             }
+            info4("index %u", i);
         }
     }
 	osMutexRelease(cmsg_2_mutex);
 
 	mode_cnt = d_val_cnt[0];
+	//info4("d_v_cnt %u", d_val_cnt[0]);
 	*cons_val_d = CM_UP; // CM_UP == 1
 	for(i = 1;i < CM_PLACE_CARGO;i++)
     {
+        //info4("d_v_cnt %u", d_val_cnt[i]);
         if(mode_cnt < d_val_cnt[i])
         {
             mode_cnt = d_val_cnt[i];
             *cons_val_d = i+1;
-        }   
+        }
+        // TODO else if mode_cnt == d_val_cnt[i]
+    }
+    
+    for(i = 1;i < CM_PLACE_CARGO;i++)
+    {
+        //info4("d_v_cnt %u", d_val_cnt[i]);
+        // Check if there are more consensus values with same mode_cnt
+        // If so then we are not sure of consensus
+        if(mode_cnt == d_val_cnt[i] && *cons_val_d != i+1)
+        {
+            mode_cnt = 0;
+            break;
+        }
     }
     
     return mode_cnt;

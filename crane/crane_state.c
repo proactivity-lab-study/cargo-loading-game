@@ -176,7 +176,7 @@ void craneReceiveMessage (comms_layer_t* comms, const comms_msg_t* msg, void* us
 	if (comms_get_payload_length(comms, msg) == sizeof(crane_command_msg_t))
     {
         crane_command_msg_t * packet = (crane_command_msg_t*)comms_get_payload(comms, msg, sizeof(crane_command_msg_t));
-        info1("Rcv cmnd");
+        info1("Rcv cmnd %u %u", packet->cmd, ntoh16(packet->senderAddr));
         osStatus_t err = osMessageQueuePut(rmsg_qID, packet, 0, 0);
 		if(err == osOK)debug1("rc query");
 		else debug1("msgq err");
